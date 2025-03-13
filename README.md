@@ -1,4 +1,4 @@
-# reneel_utils
+# reneel-utils
 
 Workflow for network analysis using reneel.
 
