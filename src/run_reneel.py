@@ -65,6 +65,14 @@ def seed_generator(seeds=None):
             yield s
 
 
+def ensure_dir_exists(path):
+    """Checks if the given directory exists. If not, creates it."""
+    _path = Path(path).resolve()
+    if not _path.is_dir():
+        os.makedirs(_path)
+    return None
+
+
 def run_reneel_and_collect_output(path_to_executable, 
                                   output_dir,
                                   reneel_run: ReneelRun,
@@ -90,7 +98,7 @@ def run_reneel_and_collect_output(path_to_executable,
         logging.debug(f"Created temporary directory {tmpdir}")
         tmp_suffix = f"{reneel_run.seed}-{reneel_run.chi}-{Path(tmpdir).parts[-1]}"
         # copy the input file and associated files
-        shutil.copy(reneel_run.edgelist_file, tmpdir)
+        shutil.copy(reneel_run.edgelist_file, tmpdir) # TODO when the edgelist file is huge, this creates a lot of overhead. Need to make this optional.
         for file in reneel_run.associated_files:
             shutil.copy(file, tmpdir)
         os.chdir(tmpdir)
@@ -175,6 +183,7 @@ if __name__ == "__main__":
                         level=getattr(logging, args.verbose.upper()))
     logging.debug(f"Parameters: {args}")
     reneelpath = Path(args.reneelpath).resolve()
+    ensure_dir_exists(Path(args.logfile).parent)
 
     with open(args.logfile, "a") as logfile:
         for (chi, file, run_number), seed in zip(product(args.chi, args.file, range(args.nruns)), seed_generator(seeds=args.seed)):
