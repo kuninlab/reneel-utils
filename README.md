@@ -51,7 +51,7 @@ You can install this repository as a python package straight from github using `
 pip install "git+https://github.com/kuninlab/reneel-utils.git"
 ```
 
-### pip installing locally 
+#### pip installing locally 
 If you also need to use the commandline scripts or will be editing this package as you go, it might be more convenient to `git clone` this repository. You can then install the repo as a python package:
 
 ```shell
