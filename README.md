@@ -44,12 +44,14 @@ get_available_clustering(clustering_dir="../results/clustering")
 
 ### Package installation
 
-You can install this as a python package using `pip`. If you just need the utility functions in `data.py` (i.e. for finding results files from previous runs of reneel, loading the partition data, etc.) then you can probably get away with
+#### pip installing from github
+You can install this repository as a python package straight from github using `pip`. If you just need the utility functions in `data.py` (i.e. for finding results files from previous runs of reneel, loading the partition data, etc.) then you can probably get away with
 
 ```shell
 pip install "git+https://github.com/kuninlab/reneel-utils.git"
 ```
 
+### pip installing locally 
 If you also need to use the commandline scripts or will be editing this package as you go, it might be more convenient to `git clone` this repository. You can then install the repo as a python package:
 
 ```shell
