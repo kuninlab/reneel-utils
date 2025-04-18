@@ -17,7 +17,7 @@ A full list of options can be viewed using the `-h` option. You can also pass so
 
 
 > ```shell
-> run_reneel.py edgelist_file -x some/path/a.out -c 0.1 0.2 -g 3
+> run_reneel.py edgelist_file -x some/path/a.out -c 0.1 0.2 -g 3 -s 12345
 > ```
 > is equivalent to
 > ```shell
@@ -30,5 +30,6 @@ A full list of options can be viewed using the `-h` option. You can also pass so
 > reneelpath = "some/path/a.out"
 > chi = [0.1, 0.2]
 > rg-parameter = 3
+> seed = [12345]
 > ```
-> The main "gotcha" here is that `file` and `chi` must be [arrays](https://toml.io/en/v1.0.0#array), even if there's only one value.
+> The main "gotcha" here is that `file`, `chi`, and `seed` must be [arrays](https://toml.io/en/v1.0.0#array), even if there's only one value.
