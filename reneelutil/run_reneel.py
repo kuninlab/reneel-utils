@@ -9,6 +9,7 @@ random seeds.
 """
 import argparse, logging
 import os, shutil
+import tomlkit
 from pathlib import Path
 import subprocess
 import time
@@ -17,6 +18,7 @@ from secrets import randbits
 from tempfile import TemporaryDirectory
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
+
 
 @dataclass
 class ReneelRun:
@@ -142,57 +144,82 @@ def run_reneel_and_collect_output(path_to_executable,
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="""Run the reneel executable one or more times.
-                                 This could really be a bash script. Note that one of -r or -s is required.""")
-    ap.add_argument("file", nargs="+", help="formatted edgelist file")
-    ap.add_argument("-o", "--outputdir", default=os.getcwd(),
-                    help="Directory to store output. Defaults to current working directory")
-    ap.add_argument("-c", "--chi", default=[0.0],
-                    nargs="+", type=float,
-                    help="Chi value(s) to use")
-    ap.add_argument("-n", "--nruns", type=int, default=1,
-                    help="Number of times to run each chi value")
-    seed = ap.add_mutually_exclusive_group(required=True)
-    seed.add_argument("-s", "--seed", nargs="+",
-                      type=int,
-                      help="Seed for random number generation. Multiple seeds will be cycled through for each individual call to reneel. Cannot be used with -r")
-    seed.add_argument("-r", "--random", action="store_true",
-                      help="Generate random seeds for each run. Cannot be used with -s")
-    ap.add_argument("-p", "--nproc", type=int, default=os.cpu_count(),
-                    help="Number of processors used")
-    ap.add_argument("-x", "--reneelpath", default="a.out",  # x for executable
-                    help="Path to reneel executable. Default is 'a.out'; assumes executable is in the same directory as the input files.")
-    ap.add_argument("-k", "--keepresults", action="store_true",
-                    help="Pass to keep results_[file] from reneel output")
-    ap.add_argument("-e", "--rg-ensemble-size", type=int, default=10,
-                    help="Ensemble size for randomized greedy portion of the algorithm")
-    ap.add_argument("-f", "--reneel-ensemble-size", type=int, default=8,
-                    help="Ensemble size for reneel iteration")
-    ap.add_argument("-g", "--rg-parameter", type=int, default=2,
-                    help="Parameter for randomized greedy algorithm (default 2)")
-    ap.add_argument("-l", "--logfile", default="reneel.log",
-                    help="Write the CompletedProcess objects to this file")
-    ap.add_argument("-v", "--verbose",
-                    choices=["debug", "info", "warn", "error", "critical"],
-                    default="warn",
-                    help="How verbose the output should be, from most verbose to least verbose. Default is 'warn'")
+                                 This could probably just be a bash script but here we are.""")
+    io_group = ap.add_argument_group("Inputs and outputs", "Control input/output")
+    qg_group = ap.add_argument_group("Qg and reneel configuration", "chi, runs, etc")
+    ex_group = ap.add_argument_group("Reneel arguments", "arguments passed to reneel executable")
+    ap.add_argument("file", nargs="*", help="formatted edgelist file")
     ap.add_argument("-t", "--test", action="store_true",
                     help="Run tests only. Replaces execution of reneel program with echo statement and creates test output files.")
-    args = ap.parse_args()
+    
+
+    io_group.add_argument("--config",
+                    help="Pass arguments via configuration file. Overwrites default values described here.")
+    io_group.add_argument("-o", "--outputdir", default=os.getcwd(),
+                    help="Directory to store output. Defaults to current working directory")
+    io_group.add_argument("-k", "--keepresults", action="store_true",
+                    help="Pass to keep results_[file] from reneel output")
+    io_group.add_argument("-l", "--logfile", default="reneel.log",
+                    help="Write the CompletedProcess objects to this file")
+    io_group.add_argument("-v", "--verbose",
+                          choices=["debug", "info", "warn", "error", "critical"],
+                          default="warn",
+                          help="How verbose the output should be, from most verbose to least verbose. Default is 'warn'")
+    
+    qg_group.add_argument("-c", "--chi", default=[0.0],
+                    nargs="+", type=float,
+                    help="Chi value(s) to use")
+    qg_group.add_argument("-n", "--nruns", type=int, default=1,
+                    help="Number of times to run each chi value")
+    qg_group.add_argument("-s", "--seed", nargs="+",
+                          type=int,
+                          help="Seed for random number generation. Multiple seeds will be cycled through for each individual call to reneel. If not specified, seeds will be generated randomly")
+    # seed = qg_group.add_mutually_exclusive_group(required=True)
+    # seed.add_argument("-s", "--seed", nargs="+",
+    #                   type=int,
+    #                   help="Seed for random number generation. Multiple seeds will be cycled through for each individual call to reneel. Cannot be used with -r")
+    # seed.add_argument("-r", "--random", action="store_true",
+    #                   help="Generate random seeds for each run. Cannot be used with -s")
+    
+    ex_group.add_argument("-x", "--reneelpath", default="a.out",  # x for executable
+                    help="Path to reneel executable. Default is 'a.out'; assumes executable is in the same directory as the input files.")
+    ex_group.add_argument("-p", "--nproc", type=int, default=os.cpu_count(),
+                    help="Number of processors used")
+    ex_group.add_argument("-e", "--rg-ensemble-size", type=int, default=10,
+                    help="Ensemble size for randomized greedy portion of the algorithm")
+    ex_group.add_argument("-f", "--reneel-ensemble-size", type=int, default=8,
+                    help="Ensemble size for reneel iteration")
+    ex_group.add_argument("-g", "--rg-parameter", type=int, default=2,
+                    help="Parameter for randomized greedy algorithm (default 2)")
+    
+    
+    cli_args = ap.parse_args()  # the arguments passed from the commandline are the defaults
     logging.basicConfig(format="%(asctime)s %(levelname)s\t%(message)s",
                         datefmt='%m/%d/%Y %I:%M:%S %p',
-                        level=getattr(logging, args.verbose.upper()))
-    logging.debug(f"Parameters: {args}")
-    reneelpath = Path(args.reneelpath).resolve()
-    ensure_dir_exists(Path(args.logfile).parent)
+                        level=getattr(logging, cli_args.verbose.upper()))
+    logging.debug(f"Commandline arguments:   {cli_args}")
 
-    with open(args.logfile, "a") as logfile:
-        for (chi, file, run_number), seed in zip(product(args.chi, args.file, range(args.nruns)), seed_generator(seeds=args.seed)):
+    args = vars(cli_args)
+    if cli_args.config is not None:  # overwrite with config file values
+        config_path = Path(cli_args.config)
+        with open(config_path, "rb") as config_file:
+            config = tomlkit.load(config_file)
+        config_args = {k.replace("-", "_"): v for k,v in config["run_reneel"].items()}
+        logging.debug(f"Configuration from file: {config_args}")
+        args.update(config_args)
+        # args.update(dict(config["run_reneel"]))
+    logging.debug(f"Final configuration:     {args}")
+    reneelpath = Path(args["reneelpath"]).resolve()
+    ensure_dir_exists(Path(args["logfile"]).parent)
+
+    with open(args["logfile"], "a") as logfile:
+        for (chi, file, run_number), seed in zip(product(args["chi"], args["file"], range(args["nruns"])), seed_generator(seeds=args["seed"])):
             # print("iteration:", chi, file, run_number)
             logging.info(f"Iteration {chi}-{file}-{run_number}")
             reneelrun = ReneelRun(edgelist_file=file, seed=seed, chi=chi,
-                                  rg_ensemble_size=args.rg_ensemble_size,
-                                  reneel_ensemble_size=args.reneel_ensemble_size,
-                                  rg_parameter=args.rg_parameter)
-            run_reneel_and_collect_output(args.reneelpath, args.outputdir, reneelrun, args.keepresults, test_mode=args.test, n_cpu=args.nproc)
-            print(f"{datetime.now():%m/%d/%Y %I:%M:%S %p} test = {args.test}\n",
+                                  rg_ensemble_size=args["rg_ensemble_size"],
+                                  reneel_ensemble_size=args["reneel_ensemble_size"],
+                                  rg_parameter=args["rg_parameter"])
+            run_reneel_and_collect_output(args["reneelpath"], args["outputdir"], reneelrun, args["keepresults"], test_mode=args["test"], n_cpu=args["nproc"])
+            print(f"{datetime.now():%m/%d/%Y %I:%M:%S %p} test = {args['test']}\n",
                   reneelrun, file=logfile)
