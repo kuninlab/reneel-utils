@@ -9,7 +9,7 @@ random seeds.
 """
 import argparse, logging
 import os, shutil
-import tomlkit
+import tomllib
 from pathlib import Path
 import subprocess
 import time
@@ -203,7 +203,7 @@ if __name__ == "__main__":
     if cli_args.config is not None:  # overwrite with config file values
         config_path = Path(cli_args.config)
         with open(config_path, "rb") as config_file:
-            config = tomlkit.load(config_file)
+            config = tomllib.load(config_file)
         config_args = {k.replace("-", "_"): v for k,v in config["run_reneel"].items()}
         logging.debug(f"Configuration from file: {config_args}")
         args.update(config_args)
