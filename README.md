@@ -22,7 +22,7 @@ run_reneel data/edgelist_file.csv -r -x ../generalized-modularity-density/reneel
 ```
 
 Note that `format_edgelist` has lots of options; use `-h` to find out more.
-Likewise, `run_reneel` has lots of options.
+Likewise, `run_reneel` has lots of options (see the [README](reneelutile/README.md) for help configuring `run_reneel`).
 The `-x` option specifies the location of the actual reneel executable; by default `run_reneel` will look for `a.out` in the current working directory.
 
 If the above commands don't work after setup (e.g. because `python` is not in `/opt/anaconda3/bin/`), you can also run this as 
