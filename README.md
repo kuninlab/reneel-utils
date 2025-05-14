@@ -6,13 +6,13 @@ Workflow for network analysis using reneel, as well as utilities for managing th
 
 Assuming your directory structure looks like this:
 ```
-|-- generalized-modularity-density
+|-- generalized-modularity-density/
 |    -- reneelexecutable
-|-- reneel-utils
-|-- YOUR_PROJECT
-|   |-- data
+|-- reneel-utils/
+|-- YOUR_PROJECT/
+|   |-- data/
 |   |    -- edgelist_file.csv
-|   |-- results
+|   |-- results/
 ```
 
 You navigate to `YOUR_PROJECT` and run
