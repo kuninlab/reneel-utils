@@ -6,6 +6,7 @@ Workflow for network analysis using reneel, as well as utilities for managing th
 
 Assuming your directory structure looks like this:
 ```
+YOUR_PROJECT
 |-- generalized-modularity-density/
 |    -- reneelexecutable
 |-- reneel-utils/
@@ -30,6 +31,19 @@ If the above commands don't work after setup (e.g. because `python` is not in `/
 python format_edgelist data/edgelist_file.csv
 python run_reneel data/edgelist_file.csv -r -x ../generalized-modularity-density/reneelexecutable -o results/clustering/
 ```
+
+## Using Docker
+
+If you can't get [reneel](https://github.com/prameshsingh/generalized-modularity-density) to compile on your computer, you can use Docker to build and run everything. The workflow would be like this:
+
+```shell
+cd /path/to/reneel-utils
+make build                                        # takes a few minutes first time
+make format INPUT=edgelist DATA_DIR=/path/to/data
+make run CONFIG=run.toml DATA_DIR=/path/to/data
+```
+In this case, you should specify the reneel-run parameters in a toml file, as explained in [reneelutil/README.md](reneelutil/README.md#Options-via-toml-file).
+
 ## Usage -- loading clustering output
 
 The output of `run_reneel` uses specific file name formats to allow for easily organizing data.
