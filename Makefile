@@ -3,7 +3,7 @@ IMAGE_TAG     ?= latest
 DATA_DIR      ?= $(shell pwd)
 INPUT         ?=
 CONFIG        ?=
-OUTPUT_DIR    ?= results
+OUTPUT_DIR    ?= $(shell pwd)
 FORMAT_ARGS   ?=
 RUN_ARGS      ?=
 
@@ -14,6 +14,7 @@ REPO_DIR      := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
 DOCKER_RUN    := docker run --rm \
                    -v "$(DATA_DIR):/data" \
+                   -v "$(OUTPUT_DIR):/results" \
                    -w /data \
                    $(IMAGE_NAME):$(IMAGE_TAG)
 
@@ -33,7 +34,7 @@ run: _check-config
 	$(DOCKER_RUN) python3 $(RUN_SCRIPT) \
 	    --config $(CONFIG) \
 	    --reneelpath $(BINARY_PATH) \
-	    --outputdir $(OUTPUT_DIR) \
+	    --outputdir /results \
 	    $(RUN_ARGS)
 
 shell:
