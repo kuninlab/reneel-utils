@@ -42,7 +42,7 @@ make build                                        # takes a few minutes first ti
 make format INPUT=edgelist DATA_DIR=/path/to/data
 make run CONFIG=run.toml DATA_DIR=/path/to/data
 ```
-In this case, you should specify the reneel-run parameters in a toml file, as explained in [reneelutil/README.md](reneelutil/README.md#Options-via-toml-file).
+In this case, you should specify the reneel-run parameters in a toml file, as explained in [reneelutil/README.md](reneelutil/README.md#Options-via-toml-file), except you do **not** specify the location of the reneel executable (do not pass `-x` or `--reneelpath` options)
 
 ## Usage -- loading clustering output
 

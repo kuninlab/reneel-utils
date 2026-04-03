@@ -38,7 +38,7 @@ edgelist_file
 Comments are optional and ignored by the argument parser (implemented via [custom arg line parser](https://docs.python.org/3/library/argparse.html#argparse.ArgumentParser.convert_arg_line_to_args))
 
 #### Options via toml file
-You can also pass some or all arguments via a [`.toml` file](https://toml.io/en/). The toml file should contain a table called `run_reneel` with commandline arguments as key-value pairs (using the long form of the commandline option). A sample file is provided in the root directory of this repository; a short example is provided below. Note that the verbosity level (`-v` or `--verbose`) cannot be set via `toml` file.
+You can also pass some or all arguments via a [`.toml` file](https://toml.io/en/). The toml file should contain a table called `run_reneel` with commandline arguments as key-value pairs (using the long form of the commandline option). A sample file is provided in the root directory of this repository; a short example is provided below. Note that the verbosity level (`-v` or `--verbose`) cannot be set via `toml` file. **If running using Docker, do not specify the path to the executable -- the docker image handles that automatically.**
 
 
 > ```shell
