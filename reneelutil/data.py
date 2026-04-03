@@ -4,16 +4,19 @@ import argparse, logging, json
 from pathlib import Path
 import os
 import pandas as pd
+import re
+from re import Pattern
 
 
 def load_matrix(matrix_file: Path):
-    """Load the given connectivity matrix and return it as a dataframe"""
-    logging.info(f"Reading file {matrix_file}")
+    """Load the given connectivity matrix and return it as a dataframe.
+    Currently just a wrapper for `pandas.read_csv`"""
+    logging.info(f"Reading file {matrix_file.resolve()}")
     return pd.read_csv(matrix_file, index_col=0, header=0)
 
 
 def matrix_to_edgelist(matrix: pd.DataFrame, pre="rows", threshold=0):
-    """Stack the matrix and drop edges at or below threshold"""
+    """Stack the matrix and drop edges less or equal to threshold"""
     logging.debug(f"Treating {pre} as presynaptic; {threshold = }")
     edgelist = matrix.stack()
     renamer = {0: "weight"}
@@ -63,25 +66,36 @@ def load_partition(key_file, partition_file,
     return df
 
 
-def get_available_clustering(clustering_dir="../results/clustering"):
+def get_available_clustering(clustering_dir: str | Path="../results/clustering",
+                             name_regex:str | Pattern="^partition_(?P<name>.+)_(?P<seed>[1-9][0-9]*)-(?P<chi>[0-9]*\.[0-9]*)-(?P<id>[^.]+)(?P<ext>\.[a-zA-Z]+)?"):
     """Look for files named 'partition_[name]_[seed]-[chi]-[id] in the
     specified directory and return a dataframe with info.
     
     The default `clustering_dir` assumes you are working with a script
     or notebook in the /scripts folder of the kuninlab project template."""
+    if not isinstance(name_regex, Pattern):
+        ex = re.compile(name_regex)
+    else:
+        ex = name_regex
     available = []
+    # for file in [f for f in os.listdir(clustering_dir) if f.startswith("partition")]:
+    #     try:
+    #         prefix, name, suffix = _get_filename_parts(file)
+    #         try:
+    #             seed, chi, tmp = suffix.split("-", maxsplit=2)
+    #             seed = int(seed)
+    #             chi = float(chi)
+    #         except ValueError:
+    #             continue
+    #         available.append((name, chi, seed, tmp, Path(clustering_dir, file)))
+    #     except ValueError:
+    #         continue
     for file in [f for f in os.listdir(clustering_dir) if f.startswith("partition")]:
-        try:
-            prefix, name, suffix = _get_filename_parts(file)
-            try:
-                seed, chi, tmp = suffix.split("-", maxsplit=2)
-                seed = int(seed)
-                chi = float(chi)
-            except ValueError:
-                continue
-            available.append((name, chi, seed, tmp, Path(clustering_dir, file)))
-        except ValueError:
-            continue
+        m = ex.match(file)
+        if m is not None:
+            seed = int(m["seed"])
+            chi = float(m["chi"])
+        available.append((m["name"], chi, seed, m["id"], Path(clustering_dir, file)))
     all_files = pd.DataFrame(available, columns=["name", "chi", "seed", "id", "file"]).sort_values(["name","chi"])
     return all_files
 
