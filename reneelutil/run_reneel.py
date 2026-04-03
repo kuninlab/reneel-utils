@@ -20,9 +20,11 @@ from dataclasses import dataclass, field, asdict
 from datetime import datetime
 
 class MyArgumentParser(argparse.ArgumentParser):
-    """Overrides the `convert_arg_line_to_args` function to make it easier to use """
+    """Overrides the `convert_arg_line_to_args` function to make it easier to use.
+    In particular, allows for comments starting with '#'"""
     def convert_arg_line_to_args(self, arg_line: str):
-        return arg_line.strip().split()
+        pre_comment = arg_line.split("#", maxsplit=1)[0].strip()
+        return pre_comment.strip().split()
 
 
 @dataclass
