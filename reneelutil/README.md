@@ -2,6 +2,17 @@
 
 This package provides a few scripts intendended to be run from the commandline (`format_edgelist.py` and `run_reneel.py`) as well as a library of functions for working with the output of those files (`data.py`)
 
+## `format_edgelist.py`
+
+The basic usage options are
+```shell
+format_edgelist.py edgelist [options]
+format_edgelist.py @options [options]
+format_edgelist.py --config config.toml [options]
+```
+
+See the section below for the difference between these three.
+
 ## `run_reneel.py`
 
 The basic usage options are
@@ -16,7 +27,7 @@ run_reneel.py --config configuration_file [options]
 A full list of options can be viewed using the `-h` option.
 Because there are so many commandline options, it can become unwieldy to write out the command, and difficult to make minor modifications when you want to run it again. To make life easier, there are two ways of reading options from a file.
 
-#### Options via plain text
+### Options via plain text
 Option one more or less directly passes the contents of a text file to the argument parser (see [argparse documentation](https://docs.python.org/3/library/argparse.html#fromfile-prefix-chars))
 
 ```shell
@@ -37,7 +48,7 @@ edgelist_file
 ```
 Comments are optional and ignored by the argument parser (implemented via [custom arg line parser](https://docs.python.org/3/library/argparse.html#argparse.ArgumentParser.convert_arg_line_to_args))
 
-#### Options via toml file
+### Options via toml file
 You can also pass some or all arguments via a [`.toml` file](https://toml.io/en/). The toml file should contain a table called `run_reneel` with commandline arguments as key-value pairs (using the long form of the commandline option). A sample file is provided in the root directory of this repository; a short example is provided below. Note that the verbosity level (`-v` or `--verbose`) cannot be set via `toml` file. **If running using Docker, do not specify the path to the executable -- the docker image handles that automatically.**
 
 
@@ -58,3 +69,17 @@ You can also pass some or all arguments via a [`.toml` file](https://toml.io/en/
 > seed = [12345]
 > ```
 > The main "gotcha" here is that `file`, `chi`, and `seed` must be [arrays](https://toml.io/en/v1.0.0#array), even if there's only one value.
+
+## Combined `.toml` config
+
+See [/data/karate.toml](/data/karate.toml) for an example. With a single file you can control both scripts. It would look something like this:
+```toml
+[format_edgelist]
+file = ["karate.txt"]
+
+[run_reneel]
+file = ["karate.txt"]
+chi = [0.0, 0.5, 1.0]
+logfile = "reneel.log"
+```
+This is also a quality of life feature for running this using the [Docker workflow](/docs/README.md)
