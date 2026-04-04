@@ -130,7 +130,7 @@ Do **not** set `reneelpath` in this file — the Makefile handles it automatical
 
 ```toml
 [run_reneel]
-file = ["clean_network-1.txt"]   # the clean_ output from the format step
+file = ["network-1.txt"]   
 chi = [0.0, 0.5, 1.0]
 nruns = 5
 rg_ensemble_size = 20
