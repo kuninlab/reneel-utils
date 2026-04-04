@@ -25,9 +25,9 @@ all: _check-input _check-config format run
 build:
 	docker build -t $(IMAGE_NAME):$(IMAGE_TAG) "$(REPO_DIR)"
 
-format: _check-input
+format: _check-config
 	$(DOCKER_RUN) python3 $(FORMAT_SCRIPT) \
-	    $(INPUT) \
+	    --config $(CONFIG) \
 	    $(FORMAT_ARGS)
 
 run: _check-config
@@ -46,8 +46,12 @@ shell:
 
 _check-input:
 	@if [ -z "$(INPUT)" ]; then \
-	    echo "Error: INPUT is not set. Usage: make format INPUT=myedgelist.txt"; \
-	    exit 1; \
+		if [ -z "$(CONFIG)" ]; then \
+			echo "Error: INPUT or CONFIG must be set."; \
+			echo "Usage: make format INPUT=edgelist.txt"; \
+			echo "or:    make format CONFIG=config.toml"; \
+	        exit 1; \
+		fi \
 	fi
 
 _check-config:

@@ -15,6 +15,8 @@ from collections import Counter
 import shutil
 import os
 
+from util import MyArgumentParser, parse_toml_args
+
 class AddDict(dict):
     """If `key` is missing, set the default value to `0.0`
     Useful for adding up edge weights"""
@@ -189,13 +191,13 @@ def add_underscore_to_suffix(suf: str):
     return suf
 
 
-def format_for_reneel(args):
+def format_for_reneel(**args):
     logging.debug(args)
     reserved_prefixes = ["clean_", "key_", "degree_", "info_", "original_"]
-    original_prefix = add_underscore_to_prefix(args.inprefix)
-    original_suffix = add_underscore_to_suffix(args.insuffix)
-    prefix = add_underscore_to_prefix(args.prefix)
-    suffix = add_underscore_to_suffix(args.suffix)
+    original_prefix = add_underscore_to_prefix(args["inprefix"])
+    original_suffix = add_underscore_to_suffix(args["insuffix"])
+    prefix = add_underscore_to_prefix(args["prefix"])
+    suffix = add_underscore_to_suffix(args["suffix"])
     # if len(prefix) > 0 and not prefix.endswith("_"):
     #     prefix = prefix + "_"
     # if len(suffix) > 0 and not suffix.startswith("_"):
@@ -208,27 +210,27 @@ def format_for_reneel(args):
 
     sep = {"space": None,
         "comma": ",",
-        "semicolon": ";"}.get(args.sep, None)
+        "semicolon": ";"}.get(args["sep"], None)
     cvt = {"int": int,
            "str": str,
-           "float": float}.get(args.convert, int)
+           "float": float}.get(args["convert"], int)
     wcvt = {"int": int,
-            "float": float}.get(args.wtype, int)
+            "float": float}.get(args["wtype"], int)
 
-    for file in args.file:
+    for file in args["file"]:
         source_path = Path(file).resolve()
         origin_name = source_path.stem.replace(original_prefix, "").replace(original_suffix, "")
         # copy_file = source_path.with_stem(f"original_{source_path.stem}{suffix}")
         # copy_file = source_path.with_stem(f"original_{origin_name}{suffix}")
-        # if args.copy or len(prefix) == 0:
+        # if args["copy"] or len(prefix) == 0:
         #     logging.debug(f"Creating a copy ({copy_file}) of the input file ({source_path})")
         #     shutil.copyfile(source_path, copy_file)
         
-        if args.outputdir is None:
+        if args["outputdir"] is None:
             outputdir = Path(source_path.parent)
             logging.debug(f"Inferred output directory {outputdir.resolve()}")
         else:
-            outputdir = Path(args.outputdir)
+            outputdir = Path(args["outputdir"])
         if not outputdir.is_dir():
             logging.debug(f"Attempting to create directory {outputdir.resolve()}")
             os.makedirs(outputdir)
@@ -247,9 +249,9 @@ def format_for_reneel(args):
 
 
         # load the graph into memory
-        nodes, degrees, edges = read_graph(source_path, sep=sep, skip=args.skip,
-                                        directed=args.directed, convert=cvt, weight_convert=wcvt,
-                                        u_col=args.u_col, v_col=args.v_col, w_col=args.w_col)
+        nodes, degrees, edges = read_graph(source_path, sep=sep, skip=args["skip"],
+                                        directed=args["directed"], convert=cvt, weight_convert=wcvt,
+                                        u_col=args["u_col"], v_col=args["v_col"], w_col=args["w_col"])
         logging.info(f"Read in {len(nodes)} nodes and {len(edges)} edges")
         # mapper = dict(zip(sorted(nodes.keys()), range(1, len(nodes) + 1)))
         mapper = {v: i for i, v in enumerate(sorted(nodes), start=1)}
@@ -287,50 +289,61 @@ This python script is an attempt to reverse-engineer the `work.sh` file.""",
     
     $ python format_edgelist edgelist.csv --sep comma
     $ reneel [params] edgelist.csv""")
-    ap.add_argument("file", nargs="+",
+    ap.add_argument("file", nargs="*",
                     help="Edge list file")
-    ap.add_argument("-o", "--outputdir",
+    ap.add_argument("--config",
+                    help="Pass arguments via configuration file. Overwrites commandline args.")
+    ap.add_argument("--verbose",
+                    choices=["debug", "info", "warn", "error", "critical"],
+                    default="warn",
+                    help="How verbose the output should be, from most verbose to least verbose. Default is 'warn'")
+    io_group = ap.add_argument_group("Inputs and outputs", "Control input/output")
+    io_group.add_argument("-o", "--outputdir",
                     help="Output directory (will be created if needed)")
-    ap.add_argument("--inprefix", default="",
+    io_group.add_argument("--inprefix", default="",
                     help="Assumes input filename is of the form [inprefix]_[file]_[insuffix].[ext]. For purposes of naming outputs, will ignore [inprefix]")
-    ap.add_argument("--insuffix", default="",
+    io_group.add_argument("--insuffix", default="",
                     help="Assumes input filename is of the form [inprefix]_[file]_[insuffix].[ext]. For purposes of naming outputs, will ignore [insuffix]")
-    ap.add_argument("-p", "--prefix", default="",
+    io_group.add_argument("-p", "--prefix", default="",
                     help="Output file will be named [prefix]_[file]_[suffix].[ext]. Underscore is optional, and won't be included if prefix is empty.")
-    ap.add_argument("-s", "--suffix", default="",
+    io_group.add_argument("-s", "--suffix", default="",
                     help="Output file will be named [prefix]_[file]_[suffix].[ext]. Underscore is optional, and won't be included if suffix is empty.")
     # ap.add_argument("--name", default="_formatted",
     #                 help="Output file will be named [file]_[suffix].[ext]. Default is 'formatted'. Underscore is optional.")
     # ap.add_argument("--copy", action="store_true",
     #                 help="Create a copy of the input file, called 'original_[file]'.")
-    ap.add_argument("--skip",
+    structure_group = ap.add_argument_group("File structure", "Specify structure of the data file(s)")
+    structure_group.add_argument("--skip",
                     type=int, default=0,
                     help="Number of rows in the edgelist file to skip (useful if the file has a header row)")
-    ap.add_argument("--sep",
+    structure_group.add_argument("--sep",
                     choices=["space", "comma", "semicolon"], default="space",
                     help="How to split rows of the input file. By default, `l.split()` is used which splits at whitespace (see python docs for more info); using --s comma will use `l.split(',')`. This can be used if reading, e.g. a csv file.")
-    ap.add_argument("--verbose",
-                    choices=["debug", "info", "warn", "error", "critical"],
-                    default="warn",
-                    help="How verbose the output should be, from most verbose to least verbose. Default is 'warn'")
-    ap.add_argument("-d", "--directed", action="store_true",
+    structure_group.add_argument("-d", "--directed", action="store_true",
                     help="Preserve edge direction")
-    ap.add_argument("-c", "--convert", choices=["int", "str", "float"],
+    structure_group.add_argument("-c", "--convert", choices=["int", "str", "float"],
                     default="int",
                     help="How to parse nodes. Default is int")
-    ap.add_argument("--wtype", choices=["int", "float"],
+    structure_group.add_argument("--wtype", choices=["int", "float"],
                     default="int",
                     help="How to parse weights. Default is int.")
-    ap.add_argument('-u', '--u_col', type=int, default=0,
+    structure_group.add_argument('-u', '--u_col', type=int, default=0,
                     help="Which column contains the source node of each edge. Default 0 for first column.")
-    ap.add_argument('-v', '--v_col', type=int, default=1,
+    structure_group.add_argument('-v', '--v_col', type=int, default=1,
                     help="Which column contains the target node of each edge. Default 1 for second column")
-    ap.add_argument('-w', '--w_col', type=int, default=2,
+    structure_group.add_argument('-w', '--w_col', type=int, default=2,
                     help="Which column contains the edge weight. Default 2 for third column")
-    args = ap.parse_args()
+    cli_args = ap.parse_args()
 
     logging.basicConfig(format="%(asctime)s %(levelname)s\t%(message)s",
                         datefmt='%m/%d/%Y %I:%M:%S %p',
-                        level=getattr(logging, args.verbose.upper()))
+                        level=getattr(logging, cli_args.verbose.upper()))
+    logging.debug(f"Commandline arguments:   {cli_args}")
     
-    format_for_reneel(args)
+    args = vars(cli_args)
+    config_args = parse_toml_args(cli_args.config, Path(__file__).stem)
+    logging.debug(f"Configuration from file: {config_args}")
+    args.update(config_args)
+    logging.debug(f"Final configuration:     {args}")
+    
+    format_for_reneel(**args)
