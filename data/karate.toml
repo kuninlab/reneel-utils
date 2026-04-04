@@ -1,0 +1,4 @@
+[run_reneel]
+file = ["karate.txt"]
+chi = [0.0, 0.5, 1.0]
+logfile = "reneel.log"

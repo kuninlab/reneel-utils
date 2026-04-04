@@ -9,7 +9,7 @@ random seeds.
 """
 import argparse, logging
 import os, shutil
-import tomlkit
+import tomllib
 from pathlib import Path
 import subprocess
 import time
@@ -18,6 +18,13 @@ from secrets import randbits
 from tempfile import TemporaryDirectory
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
+
+class MyArgumentParser(argparse.ArgumentParser):
+    """Overrides the `convert_arg_line_to_args` function to make it easier to use.
+    In particular, allows for comments starting with '#'"""
+    def convert_arg_line_to_args(self, arg_line: str):
+        pre_comment = arg_line.split("#", maxsplit=1)[0].strip()
+        return pre_comment.strip().split()
 
 
 @dataclass
@@ -143,11 +150,13 @@ def run_reneel_and_collect_output(path_to_executable,
 
 
 if __name__ == "__main__":
-    ap = argparse.ArgumentParser(description="""Run the reneel executable one or more times.
-                                 This could probably just be a bash script but here we are.""")
+    # ap = argparse.ArgumentParser(description="""Run the reneel executable one or more times.
+    #                              This could probably just be a bash script but here we are.""",
+    #                              fromfile_prefix_chars="@")
+    ap = MyArgumentParser(description="""Run the reneel executable one or more times.
+                                 This could probably just be a bash script but here we are.""",
+                                 fromfile_prefix_chars="@")
     io_group = ap.add_argument_group("Inputs and outputs", "Control input/output")
-    qg_group = ap.add_argument_group("Qg and reneel configuration", "chi, runs, etc")
-    ex_group = ap.add_argument_group("Reneel arguments", "arguments passed to reneel executable")
     ap.add_argument("file", nargs="*", help="formatted edgelist file")
     ap.add_argument("-t", "--test", action="store_true",
                     help="Run tests only. Replaces execution of reneel program with echo statement and creates test output files.")
@@ -166,6 +175,7 @@ if __name__ == "__main__":
                           default="warn",
                           help="How verbose the output should be, from most verbose to least verbose. Default is 'warn'")
     
+    qg_group = ap.add_argument_group("Qg and reneel configuration", "chi, runs, etc")
     qg_group.add_argument("-c", "--chi", default=[0.0],
                     nargs="+", type=float,
                     help="Chi value(s) to use")
@@ -181,6 +191,7 @@ if __name__ == "__main__":
     # seed.add_argument("-r", "--random", action="store_true",
     #                   help="Generate random seeds for each run. Cannot be used with -s")
     
+    ex_group = ap.add_argument_group("Reneel arguments", "arguments passed to reneel executable")
     ex_group.add_argument("-x", "--reneelpath", default="a.out",  # x for executable
                     help="Path to reneel executable. Default is 'a.out'; assumes executable is in the same directory as the input files.")
     ex_group.add_argument("-p", "--nproc", type=int, default=os.cpu_count(),
@@ -203,7 +214,7 @@ if __name__ == "__main__":
     if cli_args.config is not None:  # overwrite with config file values
         config_path = Path(cli_args.config)
         with open(config_path, "rb") as config_file:
-            config = tomlkit.load(config_file)
+            config = tomllib.load(config_file)
         config_args = {k.replace("-", "_"): v for k,v in config["run_reneel"].items()}
         logging.debug(f"Configuration from file: {config_args}")
         args.update(config_args)

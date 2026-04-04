@@ -13,7 +13,6 @@ from pathlib import Path
 import logging
 from collections import Counter
 import shutil
-import pandas as pd
 import os
 
 class AddDict(dict):
@@ -118,7 +117,7 @@ def write_degree(degree_file: Path, nodes: dict, degrees: dict):
 
 def load_partition(file_stem, chi, seed=17289,
                    key_dir=None,
-                   dir=None,  existing_df: pd.DataFrame=None,
+                   dir=None,  existing_df=None,
                    index_name="bodyId", default_extension=".csv",
                    old_format=False):
     """Try to load partition data. This amounts to finding several files and combining them.
@@ -129,6 +128,7 @@ def load_partition(file_stem, chi, seed=17289,
     It looks for the former if `old_format=False` (the default) and the latter if True.
     
     If an existing dataframe is passed, merge information into it."""
+    import pandas as pd
     # try to find partition_file_stem and key_file_stem
     if dir is None:
         dir = Path(os.getcwd())
