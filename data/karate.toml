@@ -1,3 +1,6 @@
+[format_edgelist]
+file = ["karate.txt"]
+
 [run_reneel]
 file = ["karate.txt"]
 chi = [0.0, 0.5, 1.0]

@@ -19,12 +19,7 @@ from tempfile import TemporaryDirectory
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 
-class MyArgumentParser(argparse.ArgumentParser):
-    """Overrides the `convert_arg_line_to_args` function to make it easier to use.
-    In particular, allows for comments starting with '#'"""
-    def convert_arg_line_to_args(self, arg_line: str):
-        pre_comment = arg_line.split("#", maxsplit=1)[0].strip()
-        return pre_comment.strip().split()
+from util import MyArgumentParser, parse_toml_args
 
 
 @dataclass
@@ -211,14 +206,17 @@ if __name__ == "__main__":
     logging.debug(f"Commandline arguments:   {cli_args}")
 
     args = vars(cli_args)
-    if cli_args.config is not None:  # overwrite with config file values
-        config_path = Path(cli_args.config)
-        with open(config_path, "rb") as config_file:
-            config = tomllib.load(config_file)
-        config_args = {k.replace("-", "_"): v for k,v in config["run_reneel"].items()}
-        logging.debug(f"Configuration from file: {config_args}")
-        args.update(config_args)
-        # args.update(dict(config["run_reneel"]))
+    # if cli_args.config is not None:  # overwrite with config file values
+    #     config_path = Path(cli_args.config)
+    #     with open(config_path, "rb") as config_file:
+    #         config = tomllib.load(config_file)
+    #     config_args = {k.replace("-", "_"): v for k,v in config["run_reneel"].items()}
+    #     logging.debug(f"Configuration from file: {config_args}")
+    #     args.update(config_args)
+    #     # args.update(dict(config["run_reneel"]))
+    config_args = parse_toml_args(cli_args.config, Path(__file__).stem)
+    logging.debug(f"Configuration from file: {config_args}")
+    args.update(config_args)
     logging.debug(f"Final configuration:     {args}")
     reneelpath = Path(args["reneelpath"]).resolve()
     ensure_dir_exists(Path(args["logfile"]).parent)
