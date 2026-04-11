@@ -122,12 +122,16 @@ The compiled binary is at `/app/reneel` and the scripts are at `/app/reneelutil/
 
 ## TOML config format
 
-The `run.toml` file controls how `run_reneel.py` calls the C binary.
+The `run.toml` file controls how `format_edgelist.py` and `run_reneel.py` operate.
 Do **not** set `reneelpath` in this file — the Makefile handles it automatically.
 
 ```toml
+[format_edgelist]
+file = ["network-1.csv"]
+sep = "comma"
+
 [run_reneel]
-file = ["network-1.txt"]   
+file = ["network-1.csv"]   
 chi = [0.0, 0.5, 1.0]
 nruns = 5
 rg_ensemble_size = 20
