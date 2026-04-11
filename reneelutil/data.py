@@ -40,7 +40,8 @@ def _get_filename_parts(path):
 
 
 def load_partition(key_file, partition_file,
-                   include_seed=False, index_name="bodyId"):
+                   include_seed=False, index_name="bodyId",
+                   node_convert=int):
     """Load the given key and partition data as a dataframe
     whose index is the bodyIds and a single column giving the cluster
     id for each neuron. The column name will be either `chi` or `(chi, seed)`
@@ -56,7 +57,7 @@ def load_partition(key_file, partition_file,
     seed = int(seed)
     chi = float(chi)
     with open(key_file, "r") as kf, open(partition_file, "r") as pf:
-        df = pd.DataFrame([(int(key.strip()), int(cluster.strip())) for key, cluster in zip(kf.readlines(), pf.readlines())])
+        df = pd.DataFrame([(node_convert(key.strip()), int(cluster.strip())) for key, cluster in zip(kf.readlines(), pf.readlines())])
     df = df.set_index(0)
     if include_seed:
         df.columns = pd.Index([(chi, seed)])
