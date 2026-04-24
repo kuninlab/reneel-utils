@@ -4,6 +4,7 @@ import argparse, logging, json
 from pathlib import Path
 import os
 import pandas as pd
+import numpy as np
 import re
 from re import Pattern
 
@@ -135,3 +136,27 @@ def load_selected_runs(selected_runs: dict | str | Path,
             parts.append(current_partition)
     nodes = pd.concat(parts, axis=1)
     return nodes
+
+
+def coclustering(name: str, chi: float=0.0,
+                 preprocessed_dir="data/preprocessed",
+                 clustering_dir="results/clustering",
+                 ext="txt",
+                 available_runs=None):
+    """Find all results for a specific network and value of chi, and comptue
+    the coclustering probability of all nodes.
+
+    To avoid recomputing the available runs (which involves a directory walk),
+    you can pass the output of `get_available_clustering` as `available_runs`
+
+    Returns a n_nodes x n_nodes numpy array of numbers between 0 and 1.
+    """
+    if available_runs is None:
+        available_runs = get_available_clustering(clustering_dir)
+    file_list = available_runs.query(f"(name = '{name}') & (chi = '{chi}')")["files"]
+    coclustering = []
+    for file in file_list:
+        with open(file, "r") as f:
+            clusters = np.array([int(l.strip()) for l in f])
+            coclustering.append(clusters == clusters[:, None])
+    return coclustering.mean(axis=0)
