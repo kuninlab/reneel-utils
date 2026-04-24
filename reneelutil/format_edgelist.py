@@ -50,7 +50,13 @@ def read_graph(source: Path, sep=None, skip=0,
                 except Exception as ex:
                     logging.critical(f"Failed to split line {lineno + skip} using separator {sep=}\nOffending line: {line}\nError: {ex}")
                     exit(1)
-                u, v, w = convert(u.strip()), convert(v.strip()), weight_convert(w.strip())
+                try:
+                    u, v, w = convert(u.strip()), convert(v.strip()), weight_convert(w.strip())
+                except ValueError as ve:
+                    logging.warning(f"Parsing issue, skipping line {lineno}\n"
+                                    f"{lineno}: {line}\n"
+                                    f"{ve}")
+                    continue
                 if not directed:
                     u, v = max(u,v), min(u,v)
                 if u != v:
