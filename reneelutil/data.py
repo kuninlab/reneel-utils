@@ -159,4 +159,5 @@ def coclustering(name: str, chi: float=0.0,
         with open(file, "r") as f:
             clusters = np.array([int(l.strip()) for l in f])
             coclustering.append(clusters == clusters[:, None])
-    return np.array(coclustering).mean(axis=0)
+    N = len(coclustering)
+    return np.array(coclustering).mean(axis=0), N
