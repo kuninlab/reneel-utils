@@ -153,10 +153,10 @@ def coclustering(name: str, chi: float=0.0,
     """
     if available_runs is None:
         available_runs = get_available_clustering(clustering_dir)
-    file_list = available_runs.query(f"(name = '{name}') & (chi = '{chi}')")["files"]
+    file_list = available_runs.query(f"(name == '{name}') & (chi == {chi})")["file"]
     coclustering = []
     for file in file_list:
         with open(file, "r") as f:
             clusters = np.array([int(l.strip()) for l in f])
             coclustering.append(clusters == clusters[:, None])
-    return coclustering.mean(axis=0)
+    return np.array(coclustering).mean(axis=0)
