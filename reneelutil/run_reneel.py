@@ -152,15 +152,19 @@ if __name__ == "__main__":
                                  This could probably just be a bash script but here we are.""",
                                  fromfile_prefix_chars="@")
     io_group = ap.add_argument_group("Inputs and outputs", "Control input/output")
-    ap.add_argument("file", nargs="*", help="formatted edgelist file")
+    ap.add_argument("file", nargs="*", help="formatted edgelist file (deprecated positional form; use --input instead)")
+    io_group.add_argument("-i", "--input", nargs="*", default=None,
+                    help="Formatted edgelist file(s)")
     ap.add_argument("-t", "--test", action="store_true",
                     help="Run tests only. Replaces execution of reneel program with echo statement and creates test output files.")
     
 
     io_group.add_argument("--config",
                     help="Pass arguments via configuration file. Overwrites default values described here.")
-    io_group.add_argument("-o", "--outputdir", default=os.getcwd(),
+    io_group.add_argument("-o", "--output", dest="output", default=os.getcwd(),
                     help="Directory to store output. Defaults to current working directory")
+    io_group.add_argument("--outputdir", dest="output",
+                    help="Deprecated alias for --output")
     io_group.add_argument("-k", "--keepresults", action="store_true",
                     help="Pass to keep results_[file] from reneel output")
     io_group.add_argument("-l", "--logfile", default="reneel.log",
@@ -206,29 +210,35 @@ if __name__ == "__main__":
     logging.debug(f"Commandline arguments:   {cli_args}")
 
     args = vars(cli_args)
-    # if cli_args.config is not None:  # overwrite with config file values
-    #     config_path = Path(cli_args.config)
-    #     with open(config_path, "rb") as config_file:
-    #         config = tomllib.load(config_file)
-    #     config_args = {k.replace("-", "_"): v for k,v in config["run_reneel"].items()}
-    #     logging.debug(f"Configuration from file: {config_args}")
-    #     args.update(config_args)
-    #     # args.update(dict(config["run_reneel"]))
+    if args["file"]:
+        logging.warning("Passing input files as positional arguments is deprecated; use --input instead.")
+        if not args["input"]:
+            args["input"] = args["file"]
     config_args = parse_toml_args(cli_args.config, Path(__file__).stem)
     logging.debug(f"Configuration from file: {config_args}")
     args.update(config_args)
     logging.debug(f"Final configuration:     {args}")
+
+    # Handoff: if no input given, look for it in the format_edgelist section of the same config
+    if not args["input"]:
+        fe_cfg = parse_toml_args(cli_args.config, "format_edgelist")
+        if fe_cfg:
+            args["input"] = fe_cfg.get("input") or fe_cfg.get("file")
+            if args["input"]:
+                logging.info(f"Inferred input from [format_edgelist] config: {args['input']}")
+        if not args["input"]:
+            ap.error("No input files given and could not infer from [format_edgelist] config.")
+
     reneelpath = Path(args["reneelpath"]).resolve()
     ensure_dir_exists(Path(args["logfile"]).parent)
 
     with open(args["logfile"], "a") as logfile:
-        for (chi, file, run_number), seed in zip(product(args["chi"], args["file"], range(args["nruns"])), seed_generator(seeds=args["seed"])):
-            # print("iteration:", chi, file, run_number)
+        for (chi, file, run_number), seed in zip(product(args["chi"], args["input"], range(args["nruns"])), seed_generator(seeds=args["seed"])):
             logging.info(f"Iteration {chi}-{file}-{run_number}")
             reneelrun = ReneelRun(edgelist_file=file, seed=seed, chi=chi,
                                   rg_ensemble_size=args["rg_ensemble_size"],
                                   reneel_ensemble_size=args["reneel_ensemble_size"],
                                   rg_parameter=args["rg_parameter"])
-            run_reneel_and_collect_output(args["reneelpath"], args["outputdir"], reneelrun, args["keepresults"], test_mode=args["test"], n_cpu=args["nproc"])
+            run_reneel_and_collect_output(args["reneelpath"], args["output"], reneelrun, args["keepresults"], test_mode=args["test"], n_cpu=args["nproc"])
             print(f"{datetime.now():%m/%d/%Y %I:%M:%S %p} test = {args['test']}\n",
                   reneelrun, file=logfile)

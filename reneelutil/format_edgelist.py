@@ -223,7 +223,7 @@ def format_for_reneel(**args):
     wcvt = {"int": int,
             "float": float}.get(args["wtype"], int)
 
-    for file in args["file"]:
+    for file in args["input"]:
         source_path = Path(file).resolve()
         origin_name = source_path.stem.replace(original_prefix, "").replace(original_suffix, "")
         # copy_file = source_path.with_stem(f"original_{source_path.stem}{suffix}")
@@ -232,11 +232,11 @@ def format_for_reneel(**args):
         #     logging.debug(f"Creating a copy ({copy_file}) of the input file ({source_path})")
         #     shutil.copyfile(source_path, copy_file)
         
-        if args["outputdir"] is None:
+        if args["output"] is None:
             outputdir = Path(source_path.parent)
             logging.debug(f"Inferred output directory {outputdir.resolve()}")
         else:
-            outputdir = Path(args["outputdir"])
+            outputdir = Path(args["output"])
         if not outputdir.is_dir():
             logging.debug(f"Attempting to create directory {outputdir.resolve()}")
             os.makedirs(outputdir)
@@ -296,7 +296,9 @@ This python script is an attempt to reverse-engineer the `work.sh` file.""",
     $ python format_edgelist edgelist.csv --sep comma
     $ reneel [params] edgelist.csv""")
     ap.add_argument("file", nargs="*",
-                    help="Edge list file")
+                    help="Edge list file (deprecated positional form; use --input instead)")
+    io_group.add_argument("-i", "--input", nargs="*", default=None,
+                    help="Edge list file(s)")
     ap.add_argument("--config",
                     help="Pass arguments via configuration file. Overwrites commandline args.")
     ap.add_argument("--verbose",
@@ -304,8 +306,10 @@ This python script is an attempt to reverse-engineer the `work.sh` file.""",
                     default="warn",
                     help="How verbose the output should be, from most verbose to least verbose. Default is 'warn'")
     io_group = ap.add_argument_group("Inputs and outputs", "Control input/output")
-    io_group.add_argument("-o", "--outputdir",
+    io_group.add_argument("-o", "--output", dest="output", default=None,
                     help="Output directory (will be created if needed)")
+    io_group.add_argument("--outputdir", dest="output",
+                    help="Deprecated alias for --output")
     io_group.add_argument("--inprefix", default="",
                     help="Assumes input filename is of the form [inprefix]_[file]_[insuffix].[ext]. For purposes of naming outputs, will ignore [inprefix]")
     io_group.add_argument("--insuffix", default="",
@@ -347,9 +351,13 @@ This python script is an attempt to reverse-engineer the `work.sh` file.""",
     logging.debug(f"Commandline arguments:   {cli_args}")
     
     args = vars(cli_args)
+    if args["file"]:
+        logging.warning("Passing input files as positional arguments is deprecated; use --input instead.")
+        if not args["input"]:
+            args["input"] = args["file"]
     config_args = parse_toml_args(cli_args.config, Path(__file__).stem)
     logging.debug(f"Configuration from file: {config_args}")
     args.update(config_args)
     logging.debug(f"Final configuration:     {args}")
-    
+
     format_for_reneel(**args)
