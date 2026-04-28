@@ -1,7 +1,7 @@
 [format_edgelist]
-file = ["karate.txt"]
+input = ["karate.txt"]
 
 [run_reneel]
-file = ["karate.txt"]
+input = ["karate.txt"]
 chi = [0.0, 0.5, 1.0]
 logfile = "reneel.log"

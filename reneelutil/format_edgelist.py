@@ -297,8 +297,6 @@ This python script is an attempt to reverse-engineer the `work.sh` file.""",
     $ reneel [params] edgelist.csv""")
     ap.add_argument("file", nargs="*",
                     help="Edge list file (deprecated positional form; use --input instead)")
-    io_group.add_argument("-i", "--input", nargs="*", default=None,
-                    help="Edge list file(s)")
     ap.add_argument("--config",
                     help="Pass arguments via configuration file. Overwrites commandline args.")
     ap.add_argument("--verbose",
@@ -306,6 +304,8 @@ This python script is an attempt to reverse-engineer the `work.sh` file.""",
                     default="warn",
                     help="How verbose the output should be, from most verbose to least verbose. Default is 'warn'")
     io_group = ap.add_argument_group("Inputs and outputs", "Control input/output")
+    io_group.add_argument("-i", "--input", nargs="*", default=None,
+                    help="Edge list file(s)")
     io_group.add_argument("-o", "--output", dest="output", default=None,
                     help="Output directory (will be created if needed)")
     io_group.add_argument("--outputdir", dest="output",
