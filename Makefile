@@ -4,6 +4,7 @@ DATA_DIR      ?= $(shell pwd)
 INPUT         ?=
 CONFIG        ?=
 OUTPUT_DIR    ?= $(shell pwd)
+CONFIG_DIR    ?= $(DATA_DIR)
 FORMAT_ARGS   ?=
 RUN_ARGS      ?=
 
@@ -15,6 +16,7 @@ REPO_DIR      := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 DOCKER_RUN    := docker run --rm \
                    -v "$(DATA_DIR):/data" \
                    -v "$(OUTPUT_DIR):/results" \
+                   -v "$(CONFIG_DIR):/configs" \
                    -w /data \
                    $(IMAGE_NAME):$(IMAGE_TAG)
 
@@ -27,12 +29,12 @@ build:
 
 format: _check-config
 	$(DOCKER_RUN) python3 $(FORMAT_SCRIPT) \
-	    --config $(CONFIG) \
+	    --config /configs/$(CONFIG) \
 	    $(FORMAT_ARGS)
 
 run: _check-config
 	$(DOCKER_RUN) python3 $(RUN_SCRIPT) \
-	    --config $(CONFIG) \
+	    --config /configs/$(CONFIG) \
 	    --reneelpath $(BINARY_PATH) \
 	    --outputdir /results \
 	    $(RUN_ARGS)

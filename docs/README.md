@@ -54,6 +54,7 @@ PROJ ?= data/network-1   # default project; override with PROJ=data/network-2
 	$(MAKE) -C $(RENEEL_UTILS) $@ \
 	    DATA_DIR=$(DATA_DIR) \
 	    OUTPUT_DIR=$(OUTPUT_DIR) \
+	    CONFIG_DIR=$(CONFIG_DIR) \
 	    CONFIG=$(CONFIG)
 ```
 
@@ -69,9 +70,13 @@ Each subdirectory gets a `config.mk` with its own paths and filenames:
 DATA_DIR   = /absolute/path/to/brain-networks/data/network-1
 OUTPUT_DIR = /absolute/path/to/brain-networks/data/network-1/results
 CONFIG     = run.toml
+# CONFIG_DIR defaults to DATA_DIR; only set this if your TOML lives elsewhere:
+# CONFIG_DIR = /absolute/path/to/shared-configs
 ```
 
-`CONFIG` is the TOML file passed to both the format and run step, resolved relative to `DATA_DIR` inside the container. The config file is the only way to pass arguments to either formatter or runner; the suggestion is to write one like the example in [/data/karate.toml](/data/karate.toml). In fact, you can save a bit of work by always naming the file `reneel.toml`; then your `config.mk` only needs to specify the `DATA_DIR` and `OUTPUT_DIR`.
+`CONFIG` is the TOML file passed to both the format and run step. By default it is
+looked up in `DATA_DIR`; set `CONFIG_DIR` to point to a different directory if your
+config files are stored separately from your data. The config file is the only way to pass arguments to either formatter or runner; the suggestion is to write one like the example in [/data/karate.toml](/data/karate.toml). In fact, you can save a bit of work by always naming the file `reneel.toml`; then your `config.mk` only needs to specify the `DATA_DIR` and `OUTPUT_DIR`.
 
 ---
 
