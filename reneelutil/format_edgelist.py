@@ -15,7 +15,7 @@ from collections import Counter
 import shutil
 import os
 
-from util import MyArgumentParser, parse_toml_args
+from util import MyArgumentParser, parse_toml_args, merge_args, remap_paths_for_docker
 
 class AddDict(dict):
     """If `key` is missing, set the default value to `0.0`
@@ -272,6 +272,23 @@ def format_for_reneel(**args):
 
 
 
+_DEFAULTS = {
+    "verbose":  "warn",
+    "sep":      "space",
+    "skip":     0,
+    "directed": False,
+    "convert":  "int",
+    "wtype":    "int",
+    "u_col":    0,
+    "v_col":    1,
+    "w_col":    2,
+    "docker":   False,
+    "inprefix": "",
+    "insuffix": "",
+    "prefix":   "",
+    "suffix":   "",
+}
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description="""Format an edgelist for use with the generalized modularity density program.
 This will take the given edgelist and renumber the nodes 1...N,
@@ -292,72 +309,79 @@ degree_[filename]_[suffix] has the degree and weighted degree of each node.
 See https://github.com/prameshsingh/generalized-modularity-density for more information.
 This python script is an attempt to reverse-engineer the `work.sh` file.""",
     epilog="""The workflow for using this file looks like this:
-    
+
     $ python format_edgelist edgelist.csv --sep comma
     $ reneel [params] edgelist.csv""")
-    ap.add_argument("file", nargs="*",
+    ap.add_argument("file", nargs="*", default=None, deprecated=True,
                     help="Edge list file (deprecated positional form; use --input instead)")
-    ap.add_argument("--config",
-                    help="Pass arguments via configuration file. Overwrites commandline args.")
+    ap.add_argument("--config", default=None,
+                    help="Pass arguments via configuration file. Commandline args take precedence.")
     ap.add_argument("--verbose",
                     choices=["debug", "info", "warn", "error", "critical"],
-                    default="warn",
+                    default=None,
                     help="How verbose the output should be, from most verbose to least verbose. Default is 'warn'")
+    ap.add_argument("--docker", action="store_true", default=None,
+                    help="Remap input paths to /data/<filename> for Docker execution")
     io_group = ap.add_argument_group("Inputs and outputs", "Control input/output")
     io_group.add_argument("-i", "--input", nargs="*", default=None,
                     help="Edge list file(s)")
     io_group.add_argument("-o", "--output", dest="output", default=None,
                     help="Output directory (will be created if needed)")
-    io_group.add_argument("--outputdir", dest="output",
+    io_group.add_argument("--outputdir", dest="output", default=None,
                     help="Deprecated alias for --output")
-    io_group.add_argument("--inprefix", default="",
+    io_group.add_argument("--inprefix", default=None, deprecated=True,
                     help="Assumes input filename is of the form [inprefix]_[file]_[insuffix].[ext]. For purposes of naming outputs, will ignore [inprefix]")
-    io_group.add_argument("--insuffix", default="",
+    io_group.add_argument("--insuffix", default=None, deprecated=True,
                     help="Assumes input filename is of the form [inprefix]_[file]_[insuffix].[ext]. For purposes of naming outputs, will ignore [insuffix]")
-    io_group.add_argument("-p", "--prefix", default="",
+    io_group.add_argument("-p", "--prefix", default=None, deprecated=True,
                     help="Output file will be named [prefix]_[file]_[suffix].[ext]. Underscore is optional, and won't be included if prefix is empty.")
-    io_group.add_argument("-s", "--suffix", default="",
+    io_group.add_argument("-s", "--suffix", default=None, deprecated=True,
                     help="Output file will be named [prefix]_[file]_[suffix].[ext]. Underscore is optional, and won't be included if suffix is empty.")
-    # ap.add_argument("--name", default="_formatted",
-    #                 help="Output file will be named [file]_[suffix].[ext]. Default is 'formatted'. Underscore is optional.")
-    # ap.add_argument("--copy", action="store_true",
-    #                 help="Create a copy of the input file, called 'original_[file]'.")
     structure_group = ap.add_argument_group("File structure", "Specify structure of the data file(s)")
     structure_group.add_argument("--skip",
-                    type=int, default=0,
+                    type=int, default=None,
                     help="Number of rows in the edgelist file to skip (useful if the file has a header row)")
     structure_group.add_argument("--sep",
-                    choices=["space", "comma", "semicolon"], default="space",
+                    choices=["space", "comma", "semicolon"], default=None,
                     help="How to split rows of the input file. By default, `l.split()` is used which splits at whitespace (see python docs for more info); using --s comma will use `l.split(',')`. This can be used if reading, e.g. a csv file.")
-    structure_group.add_argument("-d", "--directed", action="store_true",
+    structure_group.add_argument("-d", "--directed", action="store_true", default=None,
                     help="Preserve edge direction")
     structure_group.add_argument("-c", "--convert", choices=["int", "str", "float"],
-                    default="int",
+                    default=None,
                     help="How to parse nodes. Default is int")
     structure_group.add_argument("--wtype", choices=["int", "float"],
-                    default="int",
+                    default=None,
                     help="How to parse weights. Default is int.")
-    structure_group.add_argument('-u', '--u_col', type=int, default=0,
+    structure_group.add_argument('-u', '--u_col', type=int, default=None,
                     help="Which column contains the source node of each edge. Default 0 for first column.")
-    structure_group.add_argument('-v', '--v_col', type=int, default=1,
+    structure_group.add_argument('-v', '--v_col', type=int, default=None,
                     help="Which column contains the target node of each edge. Default 1 for second column")
-    structure_group.add_argument('-w', '--w_col', type=int, default=2,
+    structure_group.add_argument('-w', '--w_col', type=int, default=None,
                     help="Which column contains the edge weight. Default 2 for third column")
     cli_args = ap.parse_args()
 
-    logging.basicConfig(format="%(asctime)s %(levelname)s\t%(message)s",
-                        datefmt='%m/%d/%Y %I:%M:%S %p',
-                        level=getattr(logging, cli_args.verbose.upper()))
-    logging.debug(f"Commandline arguments:   {cli_args}")
-    
-    args = vars(cli_args)
-    if args["file"]:
+    cfg = parse_toml_args(cli_args.config, Path(__file__).stem)
+
+    # Handle deprecated positional file args before the general merge
+    if cli_args.file:
         logging.warning("Passing input files as positional arguments is deprecated; use --input instead.")
-        if not args["input"]:
-            args["input"] = args["file"]
-    config_args = parse_toml_args(cli_args.config, Path(__file__).stem)
-    logging.debug(f"Configuration from file: {config_args}")
-    args.update(config_args)
+        if not cli_args.input:
+            cli_args.input = cli_args.file
+        else:
+            logging.warning("Both positional arguments and --input passed; combining lists")
+            cli_args.input = cli_args.input + cli_args.file
+
+    # Merge: explicit CLI > TOML > defaults
+    args = merge_args(cli_args, cfg, _DEFAULTS)
+
+    loglevel = args["verbose"].upper()
+    logging.basicConfig(format="%(asctime)s %(levelname)s %(module)s\t%(message)s",
+                        datefmt='%m/%d/%Y %I:%M:%S %p',
+                        level=getattr(logging, loglevel))
+    logging.debug(f"Commandline arguments:   {cli_args}")
     logging.debug(f"Final configuration:     {args}")
+
+    if args["docker"]:
+        remap_paths_for_docker(args, output_dir="/data")
 
     format_for_reneel(**args)

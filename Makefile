@@ -30,6 +30,7 @@ build:
 format: _check-config
 	$(DOCKER_RUN) python3 $(FORMAT_SCRIPT) \
 	    --config /configs/$(CONFIG) \
+	    --docker \
 	    $(FORMAT_ARGS)
 
 run: _check-config
@@ -37,6 +38,7 @@ run: _check-config
 	    --config /configs/$(CONFIG) \
 	    --reneelpath $(BINARY_PATH) \
 	    --outputdir /results \
+	    --docker \
 	    $(RUN_ARGS)
 
 shell:

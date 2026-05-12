@@ -14,12 +14,12 @@ from pathlib import Path
 import subprocess
 import time
 from itertools import cycle, product
-from secrets import randbits
+from secrets import randbits, token_hex
 from tempfile import TemporaryDirectory
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 
-from util import MyArgumentParser, parse_toml_args
+from util import MyArgumentParser, parse_toml_args, merge_args, remap_paths_for_docker
 
 
 @dataclass
@@ -77,32 +77,100 @@ def ensure_dir_exists(path):
     return None
 
 
-def run_reneel_and_collect_output(path_to_executable, 
+def run_reneel_and_collect_output(path_to_executable,
                                   output_dir,
                                   reneel_run: ReneelRun,
                                   keep_results=False, test_mode=False,
                                   n_cpu=os.cpu_count()):
-    """Create a temporary directory, copy the input files there, then run reneel.
-    Copy the output partition to the output directory"""
+    """Run reneel in the input file's directory without copying input files.
+
+    Uses a random hex ID to uniquely name output files, replacing the old
+    temp-directory name that served the same purpose.
+    """
     rg_ensemble_per_cpu = max(reneel_run.rg_ensemble_size // n_cpu, 1)
     if rg_ensemble_per_cpu * n_cpu != reneel_run.rg_ensemble_size:
         logging.warning(f"Using rg ensemble size {rg_ensemble_per_cpu * n_cpu}; expected {reneel_run.rg_ensemble_size} but {n_cpu = }")
     reneel_ensemble_per_cpu = max(reneel_run.reneel_ensemble_size // n_cpu, 1)
     if reneel_ensemble_per_cpu * n_cpu != reneel_run.reneel_ensemble_size:
         logging.warning(f"Using reneel iteration size {reneel_ensemble_per_cpu * n_cpu}; expected {reneel_run.reneel_ensemble_size} but {n_cpu = }")
-    
+
     current_dir = os.getcwd()
     _output_dir = Path(output_dir)
-    if not _output_dir.is_dir():
-        logging.debug(f"Creating directory {_output_dir}")
-        os.makedirs(_output_dir)
+    ensure_dir_exists(_output_dir)
+    _output_dir = _output_dir.resolve()
+    _path_to_executable = Path(path_to_executable).resolve()
+
+    run_id = token_hex(4)
+    tmp_suffix = f"{reneel_run.seed}-{reneel_run.chi}-{run_id}"
+
+    input_file = reneel_run.edgelist_file.resolve()
+    input_dir = input_file.parent
+
+    partition_file = input_file.with_stem(f"partition_{input_file.stem}")
+    output_partition_file = Path(_output_dir, partition_file.with_stem(f"{partition_file.stem}_{tmp_suffix}").name)
+    results_file = input_file.with_stem(f"results_{input_file.stem}")
+    output_results_file = Path(_output_dir, results_file.with_stem(f"{results_file.stem}_{tmp_suffix}").name)
+
+    cmd = [_path_to_executable, reneel_run.rg_parameter, rg_ensemble_per_cpu, reneel_ensemble_per_cpu, reneel_run.seed, reneel_run.chi, input_file.name]
+    if test_mode:
+        cmd = ['echo'] + cmd
+    cmd = list(map(str, cmd))
+    logging.debug(f"Input directory: {input_dir}\ncmd: {' '.join(cmd)}")
+
+    if test_mode:
+        with open(partition_file, "a") as pf:
+            print("Testing", reneel_run.seed, reneel_run.chi, file=pf)
+        with open(results_file, "a") as rf:
+            print("Testing", reneel_run.seed, reneel_run.chi, file=rf)
+
+    os.chdir(input_dir)
+    t_start = time.perf_counter()
+    reneel_run.completed_process = subprocess.run(cmd)
+    t_end = time.perf_counter()
+    reneel_run.wall_time = t_end - t_start
+    os.chdir(current_dir)
+
+    if reneel_run.completed_process.returncode:
+        logging.warning(f"Process returned error code {reneel_run.completed_process.returncode}:\n{reneel_run.completed_process}")
+
+    logging.debug(f"Moving {partition_file} to {output_partition_file}")
+    shutil.move(partition_file, output_partition_file)
+    if keep_results:
+        logging.debug(f"Moving {results_file} to {output_results_file}")
+        shutil.move(results_file, output_results_file)
+
+    reneel_run.partition_file = output_partition_file
+    if keep_results:
+        reneel_run.results_file = output_results_file
+    return None
+
+
+def run_reneel_and_collect_output_with_temp(path_to_executable,
+                                            output_dir,
+                                            reneel_run: ReneelRun,
+                                            keep_results=False, test_mode=False,
+                                            n_cpu=os.cpu_count()):
+    """Create a temporary directory, copy the input files there, then run reneel.
+
+    Kept for backward compatibility. For large input files prefer
+    run_reneel_and_collect_output, which avoids copying input data.
+    """
+    rg_ensemble_per_cpu = max(reneel_run.rg_ensemble_size // n_cpu, 1)
+    if rg_ensemble_per_cpu * n_cpu != reneel_run.rg_ensemble_size:
+        logging.warning(f"Using rg ensemble size {rg_ensemble_per_cpu * n_cpu}; expected {reneel_run.rg_ensemble_size} but {n_cpu = }")
+    reneel_ensemble_per_cpu = max(reneel_run.reneel_ensemble_size // n_cpu, 1)
+    if reneel_ensemble_per_cpu * n_cpu != reneel_run.reneel_ensemble_size:
+        logging.warning(f"Using reneel iteration size {reneel_ensemble_per_cpu * n_cpu}; expected {reneel_run.reneel_ensemble_size} but {n_cpu = }")
+
+    current_dir = os.getcwd()
+    _output_dir = Path(output_dir)
+    ensure_dir_exists(_output_dir)
     _output_dir = _output_dir.resolve()
     _path_to_executable = Path(path_to_executable).resolve()
     with TemporaryDirectory(dir=current_dir) as tmpdir:
         logging.debug(f"Created temporary directory {tmpdir}")
         tmp_suffix = f"{reneel_run.seed}-{reneel_run.chi}-{Path(tmpdir).parts[-1]}"
-        # copy the input file and associated files
-        shutil.copy(reneel_run.edgelist_file, tmpdir) # TODO when the edgelist file is huge, this creates a lot of overhead. Need to make this optional.
+        shutil.copy(reneel_run.edgelist_file, tmpdir)
         for file in reneel_run.associated_files:
             shutil.copy(file, tmpdir)
         os.chdir(tmpdir)
@@ -111,13 +179,12 @@ def run_reneel_and_collect_output(path_to_executable,
         output_partition_file = Path(_output_dir, partition_file.with_stem(f"{partition_file.stem}_{tmp_suffix}").name)
         results_file = _input_file.with_stem(f"results_{_input_file.stem}")
         output_results_file = Path(_output_dir, results_file.with_stem(f"{results_file.stem}_{tmp_suffix}").name)
-        
-        cmd = [_path_to_executable,  reneel_run.rg_parameter, rg_ensemble_per_cpu, reneel_ensemble_per_cpu, reneel_run.seed, reneel_run.chi, _input_file.name]
+
+        cmd = [_path_to_executable, reneel_run.rg_parameter, rg_ensemble_per_cpu, reneel_ensemble_per_cpu, reneel_run.seed, reneel_run.chi, _input_file.name]
         if test_mode:
             cmd = ['echo'] + cmd
         cmd = list(map(str, cmd))
         logging.debug(f"Current directory: {os.getcwd()}\ncmd: {' '.join(cmd)}")
-        # print("Got to the point that we would try subprocess.run on", cmd)
         if test_mode:
             with open(partition_file, "a") as pf:
                 print("Testing", reneel_run.seed, reneel_run.chi, file=pf)
@@ -128,10 +195,9 @@ def run_reneel_and_collect_output(path_to_executable,
         t_end = time.perf_counter()
         reneel_run.wall_time = t_end - t_start
 
-        if reneelrun.completed_process.returncode:
-            logging.warning(f"Process returned error code {reneelrun.completed_process.returncode}:\n{reneelrun.completed_process}")
+        if reneel_run.completed_process.returncode:
+            logging.warning(f"Process returned error code {reneel_run.completed_process.returncode}:\n{reneel_run.completed_process}")
 
-        # print(reneel)
         logging.debug(f"Copying {partition_file} to {output_partition_file}")
         shutil.copy(partition_file, output_partition_file)
         if keep_results:
@@ -144,79 +210,87 @@ def run_reneel_and_collect_output(path_to_executable,
     return None
 
 
+_DEFAULTS = {
+    "verbose":              "warn",
+    "chi":                  [0.0],
+    "nruns":                1,
+    "seed":                 None,
+    "nproc":                os.cpu_count(),
+    "rg_ensemble_size":     10,
+    "reneel_ensemble_size": 8,
+    "rg_parameter":         2,
+    "reneelpath":           "a.out",
+    "output":               None,
+    "logfile":              "reneel.log",
+    "keepresults":          False,
+    "test":                 False,
+    "docker":               False,
+}
+
 if __name__ == "__main__":
-    # ap = argparse.ArgumentParser(description="""Run the reneel executable one or more times.
-    #                              This could probably just be a bash script but here we are.""",
-    #                              fromfile_prefix_chars="@")
     ap = MyArgumentParser(description="""Run the reneel executable one or more times.
                                  This could probably just be a bash script but here we are.""",
                                  fromfile_prefix_chars="@")
+    ap.add_argument("file", nargs="*", default=None, deprecated=True, dest="input",
+                    help="formatted edgelist file (deprecated positional form; use --input instead)")
+    ap.add_argument("-t", "--test", action="store_true", default=None,
+                    help="Run tests only. Replaces execution of reneel program with echo statement and creates test output files.")
+
     io_group = ap.add_argument_group("Inputs and outputs", "Control input/output")
-    ap.add_argument("file", nargs="*", help="formatted edgelist file (deprecated positional form; use --input instead)")
     io_group.add_argument("-i", "--input", nargs="*", default=None,
                     help="Formatted edgelist file(s)")
-    ap.add_argument("-t", "--test", action="store_true",
-                    help="Run tests only. Replaces execution of reneel program with echo statement and creates test output files.")
-    
-
-    io_group.add_argument("--config",
-                    help="Pass arguments via configuration file. Overwrites default values described here.")
-    io_group.add_argument("-o", "--output", dest="output", default=os.getcwd(),
+    io_group.add_argument("--config", default=None,
+                    help="Pass arguments via configuration file. Commandline args take precedence.")
+    io_group.add_argument("-o", "--output", dest="output", default=None,
                     help="Directory to store output. Defaults to current working directory")
-    io_group.add_argument("--outputdir", dest="output",
+    io_group.add_argument("--outputdir", dest="output", default=None, deprecated=True,
                     help="Deprecated alias for --output")
-    io_group.add_argument("-k", "--keepresults", action="store_true",
+    io_group.add_argument("-k", "--keepresults", action="store_true", default=None,
                     help="Pass to keep results_[file] from reneel output")
-    io_group.add_argument("-l", "--logfile", default="reneel.log",
+    io_group.add_argument("-l", "--logfile", default=None,
                     help="Write the CompletedProcess objects to this file")
     io_group.add_argument("-v", "--verbose",
                           choices=["debug", "info", "warn", "error", "critical"],
-                          default="warn",
+                          default=None,
                           help="How verbose the output should be, from most verbose to least verbose. Default is 'warn'")
-    
+    io_group.add_argument("--docker", action="store_true", default=None,
+                    help="Remap input paths to /data/<filename> for Docker execution")
+
     qg_group = ap.add_argument_group("Qg and reneel configuration", "chi, runs, etc")
-    qg_group.add_argument("-c", "--chi", default=[0.0],
+    qg_group.add_argument("-c", "--chi", default=None,
                     nargs="+", type=float,
                     help="Chi value(s) to use")
-    qg_group.add_argument("-n", "--nruns", type=int, default=1,
+    qg_group.add_argument("-n", "--nruns", type=int, default=None,
                     help="Number of times to run each chi value")
-    qg_group.add_argument("-s", "--seed", nargs="+",
-                          type=int,
+    qg_group.add_argument("-s", "--seed", nargs="+", type=int, default=None,
                           help="Seed for random number generation. Multiple seeds will be cycled through for each individual call to reneel. If not specified, seeds will be generated randomly")
-    # seed = qg_group.add_mutually_exclusive_group(required=True)
-    # seed.add_argument("-s", "--seed", nargs="+",
-    #                   type=int,
-    #                   help="Seed for random number generation. Multiple seeds will be cycled through for each individual call to reneel. Cannot be used with -r")
-    # seed.add_argument("-r", "--random", action="store_true",
-    #                   help="Generate random seeds for each run. Cannot be used with -s")
-    
-    ex_group = ap.add_argument_group("Reneel arguments", "arguments passed to reneel executable")
-    ex_group.add_argument("-x", "--reneelpath", default="a.out",  # x for executable
-                    help="Path to reneel executable. Default is 'a.out'; assumes executable is in the same directory as the input files.")
-    ex_group.add_argument("-p", "--nproc", type=int, default=os.cpu_count(),
-                    help="Number of processors used")
-    ex_group.add_argument("-e", "--rg-ensemble-size", type=int, default=10,
-                    help="Ensemble size for randomized greedy portion of the algorithm")
-    ex_group.add_argument("-f", "--reneel-ensemble-size", type=int, default=8,
-                    help="Ensemble size for reneel iteration")
-    ex_group.add_argument("-g", "--rg-parameter", type=int, default=2,
-                    help="Parameter for randomized greedy algorithm (default 2)")
-    
-    
-    cli_args = ap.parse_args()  # the arguments passed from the commandline are the defaults
-    logging.basicConfig(format="%(asctime)s %(levelname)s\t%(message)s",
-                        datefmt='%m/%d/%Y %I:%M:%S %p',
-                        level=getattr(logging, cli_args.verbose.upper()))
-    logging.debug(f"Commandline arguments:   {cli_args}")
 
-    args = vars(cli_args)
-    if args["file"]:
-        logging.warning("Passing input files as positional arguments is deprecated; use --input instead.")
-        if not args["input"]:
-            args["input"] = args["file"]
-    config_args = parse_toml_args(cli_args.config, Path(__file__).stem)
-    logging.debug(f"Configuration from file: {config_args}")
-    args.update(config_args)
+    ex_group = ap.add_argument_group("Reneel arguments", "arguments passed to reneel executable")
+    ex_group.add_argument("-x", "--reneelpath", default=None,  # x for executable
+                    help="Path to reneel executable. Default is 'a.out'")
+    ex_group.add_argument("-p", "--nproc", type=int, default=None,
+                    help="Number of processors used")
+    ex_group.add_argument("-e", "--rg-ensemble-size", type=int, default=None,
+                    help="Ensemble size for randomized greedy portion of the algorithm")
+    ex_group.add_argument("-f", "--reneel-ensemble-size", type=int, default=None,
+                    help="Ensemble size for reneel iteration")
+    ex_group.add_argument("-g", "--rg-parameter", type=int, default=None,
+                    help="Parameter for randomized greedy algorithm (default 2)")
+
+    cli_args = ap.parse_args()
+    cfg = parse_toml_args(cli_args.config, Path(__file__).stem)
+
+    # Merge: explicit CLI > TOML > defaults
+    args = merge_args(cli_args, cfg, _DEFAULTS)
+
+    # output defaults to cwd after merge (not set at parse time so TOML can override it)
+    if not args["output"]:
+        args["output"] = os.getcwd()
+
+    logging.basicConfig(format="%(asctime)s %(levelname)s %(module)s\t%(message)s",
+                        datefmt='%m/%d/%Y %I:%M:%S %p',
+                        level=getattr(logging, args["verbose"].upper()))
+    logging.debug(f"Commandline arguments:   {cli_args}")
     logging.debug(f"Final configuration:     {args}")
 
     # Handoff: if no input given, look for it in the format_edgelist section of the same config
@@ -229,7 +303,9 @@ if __name__ == "__main__":
         if not args["input"]:
             ap.error("No input files given and could not infer from [format_edgelist] config.")
 
-    reneelpath = Path(args["reneelpath"]).resolve()
+    if args["docker"]:
+        remap_paths_for_docker(args, output_dir="/results")
+
     ensure_dir_exists(Path(args["logfile"]).parent)
 
     with open(args["logfile"], "a") as logfile:
