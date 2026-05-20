@@ -14,9 +14,9 @@ RUN_SCRIPT    := /app/reneelutil/run_reneel.py
 REPO_DIR      := $(shell dirname $(realpath $(firstword $(MAKEFILE_LIST))))
 
 DOCKER_RUN    := docker run --rm \
-                   -v "$(DATA_DIR):/data" \
-                   -v "$(OUTPUT_DIR):/results" \
-                   -v "$(CONFIG_DIR):/configs" \
+                   -v "$(abspath $(DATA_DIR)):/data" \
+                   -v "$(abspath $(OUTPUT_DIR)):/results" \
+                   -v "$(abspath $(CONFIG_DIR)):/configs" \
                    -w /data \
                    $(IMAGE_NAME):$(IMAGE_TAG)
 
@@ -43,7 +43,9 @@ run: _check-config
 
 shell:
 	docker run --rm -it \
-	    -v "$(DATA_DIR):/data" \
+	    -v "$(abspath $(DATA_DIR)):/data" \
+	    -v "$(abspath $(OUTPUT_DIR)):/results" \
+	    -v "$(abspath $(CONFIG_DIR)):/configs" \
 	    -w /data \
 	    $(IMAGE_NAME):$(IMAGE_TAG) \
 	    /bin/bash
