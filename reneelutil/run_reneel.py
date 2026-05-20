@@ -231,7 +231,7 @@ if __name__ == "__main__":
     ap = MyArgumentParser(description="""Run the reneel executable one or more times.
                                  This could probably just be a bash script but here we are.""",
                                  fromfile_prefix_chars="@")
-    ap.add_argument("file", nargs="*", default=None, deprecated=True, dest="input",
+    ap.add_argument("file", nargs="*", default=None,  #dest="input",
                     help="formatted edgelist file (deprecated positional form; use --input instead)")
     ap.add_argument("-t", "--test", action="store_true", default=None,
                     help="Run tests only. Replaces execution of reneel program with echo statement and creates test output files.")
@@ -243,7 +243,7 @@ if __name__ == "__main__":
                     help="Pass arguments via configuration file. Commandline args take precedence.")
     io_group.add_argument("-o", "--output", dest="output", default=None,
                     help="Directory to store output. Defaults to current working directory")
-    io_group.add_argument("--outputdir", dest="output", default=None, deprecated=True,
+    io_group.add_argument("--outputdir", dest="output", default=None, 
                     help="Deprecated alias for --output")
     io_group.add_argument("-k", "--keepresults", action="store_true", default=None,
                     help="Pass to keep results_[file] from reneel output")

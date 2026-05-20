@@ -312,7 +312,7 @@ This python script is an attempt to reverse-engineer the `work.sh` file.""",
 
     $ python format_edgelist edgelist.csv --sep comma
     $ reneel [params] edgelist.csv""")
-    ap.add_argument("file", nargs="*", default=None, deprecated=True,
+    ap.add_argument("file", nargs="*", default=None, 
                     help="Edge list file (deprecated positional form; use --input instead)")
     ap.add_argument("--config", default=None,
                     help="Pass arguments via configuration file. Commandline args take precedence.")
@@ -329,13 +329,13 @@ This python script is an attempt to reverse-engineer the `work.sh` file.""",
                     help="Output directory (will be created if needed)")
     io_group.add_argument("--outputdir", dest="output", default=None,
                     help="Deprecated alias for --output")
-    io_group.add_argument("--inprefix", default=None, deprecated=True,
+    io_group.add_argument("--inprefix", default=None, 
                     help="Assumes input filename is of the form [inprefix]_[file]_[insuffix].[ext]. For purposes of naming outputs, will ignore [inprefix]")
-    io_group.add_argument("--insuffix", default=None, deprecated=True,
+    io_group.add_argument("--insuffix", default=None, 
                     help="Assumes input filename is of the form [inprefix]_[file]_[insuffix].[ext]. For purposes of naming outputs, will ignore [insuffix]")
-    io_group.add_argument("-p", "--prefix", default=None, deprecated=True,
+    io_group.add_argument("-p", "--prefix", default=None, 
                     help="Output file will be named [prefix]_[file]_[suffix].[ext]. Underscore is optional, and won't be included if prefix is empty.")
-    io_group.add_argument("-s", "--suffix", default=None, deprecated=True,
+    io_group.add_argument("-s", "--suffix", default=None, 
                     help="Output file will be named [prefix]_[file]_[suffix].[ext]. Underscore is optional, and won't be included if suffix is empty.")
     structure_group = ap.add_argument_group("File structure", "Specify structure of the data file(s)")
     structure_group.add_argument("--skip",
