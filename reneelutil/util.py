@@ -44,7 +44,7 @@ def parse_toml_args(file, table):
     return result
 
 
-def merge_args(cli_args, cfg, defaults):
+def merge_args(cli_args, cfg, defaults, warnings={}):
     """Merge parsed CLI args, TOML config, and hardcoded defaults.
 
     Priority (highest to lowest):
@@ -59,6 +59,8 @@ def merge_args(cli_args, cfg, defaults):
                     if v is not None and k not in _IGNORE_IN_MERGE}
     cfg.update(explicit_cli)
     for k, v in defaults.items():
+        if k not in cfg and k in warnings:
+            logging.warning(f"{k} = {v} set using default setting. Warning message: {warnings[k]}")
         cfg.setdefault(k, v)
     return cfg
 

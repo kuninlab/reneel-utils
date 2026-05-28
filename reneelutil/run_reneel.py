@@ -226,6 +226,9 @@ _DEFAULTS = {
     "test":                 False,
     "docker":               False,
 }
+_WARNINGS = {
+    "nproc": "set using `os.cpu_count()` which may not give accurate results." 
+}
 
 if __name__ == "__main__":
     ap = MyArgumentParser(description="""Run the reneel executable one or more times.
@@ -281,7 +284,7 @@ if __name__ == "__main__":
     cfg = parse_toml_args(cli_args.config, Path(__file__).stem)
 
     # Merge: explicit CLI > TOML > defaults
-    args = merge_args(cli_args, cfg, _DEFAULTS)
+    args = merge_args(cli_args, cfg, _DEFAULTS, _WARNINGS)
 
     # output defaults to cwd after merge (not set at parse time so TOML can override it)
     if not args["output"]:
