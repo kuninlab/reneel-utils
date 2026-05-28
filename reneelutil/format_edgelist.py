@@ -35,7 +35,7 @@ def read_graph(source: Path, sep=None, skip=0,
     nodes : a dict of node:weight pairs (total weight of incident edges)
     degrees : a dict of a node:degree pairs (total number of incident edges)
     edges: a dict of (v1,v2):weight pairs"""
-    logging.info(f"Reading file {source.resolve()}, skipping {skip} line(s), splitting at {sep=}")
+    logging.info(f"Reading file {source.expanduser()}, skipping {skip} line(s), splitting at {sep=}")
     # nodes = set()
     nodes = AddDict()
     degrees = Counter()
@@ -75,7 +75,7 @@ def write_edges(output_file: Path, edges: dict, mapper: dict):
     """Write the formatted edgelist file"""
     # output_file = output_file.with_stem(output_file.stem + suffix)
     with open(output_file, "w") as dest:
-        logging.info(f"Writing formatted, renumbered edgelist to {output_file.resolve()}")
+        logging.info(f"Writing formatted, renumbered edgelist to {output_file.expanduser()}")
         for e, w in edges.items():
             print(f"{mapper[e[0]]} {mapper[e[1]]} {w}", file=dest)
 
@@ -84,7 +84,7 @@ def write_key(key_file: Path, mapper: dict):
     """Write the format key. Each line is `original_id formatted_id`"""
     # key_file = key_file.with_stem(key_file.stem + "_key")
     with open(key_file, "w") as dest:
-        logging.info(f"Writing mapping to {key_file.resolve()}")
+        logging.info(f"Writing mapping to {key_file.expanduser()}")
         for k, v in mapper.items():
             print(f"{k} {v}", file=dest)
 
@@ -92,7 +92,7 @@ def write_key(key_file: Path, mapper: dict):
 def write_simple_key(key_file: Path, nodes):
     """Write the nodes in sorted order"""
     with open(key_file, "w") as dest:
-        logging.info(f"Writing node list to {key_file.resolve()}")
+        logging.info(f"Writing node list to {key_file.expanduser()}")
         for k in sorted(nodes):
             print(k, file=dest)
 
@@ -110,7 +110,7 @@ def write_info(info_file: Path, nodes, edges):
     """Write the info file, which simply has the number of nodes and number of edges in the network
     (Note, this is number of edges, ignoring weight)"""
     with open(info_file, "w") as dest:
-        logging.info(f"Writing info file to {info_file.resolve()}")
+        logging.info(f"Writing info file to {info_file.expanduser()}")
         print(f"{len(nodes)} {len(edges)}", file=dest)
 
 
@@ -118,7 +118,7 @@ def write_degree(degree_file: Path, nodes: dict, degrees: dict):
     """Write the degree file.
     Each line has the unweighted and weighted degree of a node, in sorted order."""
     with open(degree_file, "w") as dest:
-        logging.info(f"Writing degree file to {degree_file.resolve()}")
+        logging.info(f"Writing degree file to {degree_file.expanduser()}")
         for v in sorted(nodes):
             print(f"{degrees[v]} {nodes[v]}", file=dest)
 
@@ -164,8 +164,8 @@ def load_partition(file_stem, chi, seed=17289,
         # try looking in a different directory
         key_file = Path(key_dir, key_file.name)
     
-    logging.info(f"Attempting to use partition file {partition_file.resolve()}")
-    logging.info(f"Attempting to use key file       {key_file.resolve()}")
+    logging.info(f"Attempting to use partition file {partition_file.expanduser()}")
+    logging.info(f"Attempting to use key file       {key_file.expanduser()}")
     
     unmapper = read_key(key_file)
     df = pd.DataFrame.from_dict(unmapper, orient="index", columns=[index_name])
@@ -224,7 +224,7 @@ def format_for_reneel(**args):
             "float": float}.get(args["wtype"], int)
 
     for file in args["input"]:
-        source_path = Path(file).resolve()
+        source_path = Path(file).expanduser()
         origin_name = source_path.stem.replace(original_prefix, "").replace(original_suffix, "")
         # copy_file = source_path.with_stem(f"original_{source_path.stem}{suffix}")
         # copy_file = source_path.with_stem(f"original_{origin_name}{suffix}")
@@ -234,11 +234,11 @@ def format_for_reneel(**args):
         
         if args["output"] is None:
             outputdir = Path(source_path.parent)
-            logging.debug(f"Inferred output directory {outputdir.resolve()}")
+            logging.debug(f"Inferred output directory {outputdir.expanduser()}")
         else:
             outputdir = Path(args["output"])
         if not outputdir.is_dir():
-            logging.debug(f"Attempting to create directory {outputdir.resolve()}")
+            logging.debug(f"Attempting to create directory {outputdir.expanduser()}")
             os.makedirs(outputdir)
         # output_file = source_path.with_stem(prefix + source_path.stem + suffix)
         # clean_file = source_path.with_stem("clean_" + source_path.stem + suffix)
