@@ -71,6 +71,47 @@ def read_graph(source: Path, sep=None, skip=0,
     return nodes, degrees, edges
 
 
+def read_compressed_graph(source: Path, skip=0,
+                          directed=False,
+                          convert=int, weight_convert=int,
+                          u_col=0, v_col=1, w_col=2):
+    """
+    Read a graph from a compressed file (e.g. `connections.csv.gz`)
+    
+    Returns:
+    nodes : a dict of node:weight pairs (total weight of incident edges)
+    degrees : a dict of a node:degree pairs (total number of incident edges)
+    edges: a dict of (v1,v2):weight pairs
+    """
+    logging.info(f"Reading file {source.expanduser()} using `pandas`; assuming comrpessed CSV format. Skipping {skip} line(s)")
+    nodes = AddDict()
+    degrees = Counter()
+    edges = AddDict()
+    import pandas as pd
+    df = pd.read_csv(source, skiprows=skip)
+    for idx, r in df.iterrows():
+        u, v, w = r.iloc[u_col], r.iloc[v_col], r.iloc[w_col]
+        try:
+            u, v, w = convert(u), convert(v), weight_convert(w)
+        except ValueError as ve:
+            logging.warning(f"Parsing issue with row {idx}\n"
+                            f"{idx}: {r}\n"
+                            f"{ve}")
+            continue
+        if not directed:
+            u, v = max(u,v), min(u,v)
+        if u != v:
+            nodes[u] += w
+            nodes[v] += w
+            degrees[u] += 1
+            degrees[v] += 1
+            edges[(u,v)] += w
+        else:
+            logging.debug(f"Ignoring self-loop {u} - {v} at index {idx}")
+    
+    return nodes, degrees, edges
+    
+
 def write_edges(output_file: Path, edges: dict, mapper: dict):
     """Write the formatted edgelist file"""
     # output_file = output_file.with_stem(output_file.stem + suffix)
