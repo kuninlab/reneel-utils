@@ -273,7 +273,7 @@ def format_for_reneel(**args):
         #     logging.debug(f"Creating a copy ({copy_file}) of the input file ({source_path})")
         #     shutil.copyfile(source_path, copy_file)
         
-        if args["output"] is None:
+        if args.get("output", None) is None:
             outputdir = Path(source_path.parent)
             logging.debug(f"Inferred output directory {outputdir.expanduser()}")
         else:
@@ -337,14 +337,16 @@ where N is the number of unique nodes in the graph. Moreover, it will sum
 weights of parallel edges. By default it also combines antiparallel edges,
 retulting in an undirecetd graph.
 
-This modifies the file in place. To keep a copy of the original file, use the --copy flag.
-The original file can be recovered using the modified file and they key file, described below.
+The original file is unchanged by this operation; all outputs are written to
+the output directory (which defaults to the directory containing the input file)
 This modified file is also copied to `clean_[file]` (for compatibility with the reneel program).
 In addition, it outputs files with prefixes `key_`, `info_`, `degree_`
 There are three additional files:
-key_[filename]_[suffix] has the mapping from original node index to new node index.
-info_[filename]_[suffix] has the number of nodes and number of edges in the network.
-degree_[filename]_[suffix] has the degree and weighted degree of each node.
+Outputs:
+clean_[filename]            the renumbered, combined edgelist.
+key_[filename]_[suffix]     the mapping from original node index to new node index.
+info_[filename]_[suffix]    the number of nodes and number of edges in the network.
+degree_[filename]_[suffix]  the degree and weighted degree of each node.
 
 
 See https://github.com/prameshsingh/generalized-modularity-density for more information.
@@ -352,7 +354,8 @@ This python script is an attempt to reverse-engineer the `work.sh` file.""",
     epilog="""The workflow for using this file looks like this:
 
     $ python format_edgelist edgelist.csv --sep comma
-    $ reneel [params] edgelist.csv""")
+    $ reneel [params] edgelist.csv""",
+    formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("file", nargs="*", default=None, 
                     help="Edge list file (deprecated positional form; use --input instead)")
     ap.add_argument("--config", default=None,
