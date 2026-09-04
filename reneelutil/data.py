@@ -69,7 +69,7 @@ def load_partition(key_file, partition_file,
 
 
 def get_available_clustering(clustering_dir: str | Path="../results/clustering",
-                             name_regex:str | Pattern="^partition_(?P<name>.+)_(?P<seed>[1-9][0-9]*)-(?P<chi>[0-9]*\.[0-9]*)-(?P<id>[^.]+)(?P<ext>\.[a-zA-Z]+)?"):
+                             name_regex:str | Pattern=r"^partition_(?P<name>.+)_(?P<seed>[0-9]+)(-|_)(?P<chi>[0-9]*\.[0-9]*)((-|_)(?P<id>[^.]+))?(?P<ext>\.[a-zA-Z]+)?"):
     """Look for files named 'partition_[name]_[seed]-[chi]-[id] in the
     specified directory and return a dataframe with info.
     
