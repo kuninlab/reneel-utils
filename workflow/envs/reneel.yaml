@@ -1,0 +1,14 @@
+# Shared by the build and run rules: the compiled binary links against this
+# env's OpenMP runtime, so it must also run inside this env.
+channels:
+  - conda-forge
+  - nodefaults
+dependencies:
+  - python=3.11
+  - c-compiler
+  - llvm-openmp   # OpenMP runtime + omp.h for clang on macOS; harmless on Linux (gcc uses libgomp)
+  - curl
+  - pip
+  - pip:
+    # Keep in sync with the tag the module is released under (see README)
+    - git+https://github.com/kuninlab/reneel-utils@snakemake

@@ -44,6 +44,54 @@ make run CONFIG=run.toml DATA_DIR=/path/to/data
 ```
 In this case, you should specify the reneel-run parameters in a toml file, as explained in [reneelutil/README.md](reneelutil/README.md#Options-via-toml-file), except you do **not** specify the location of the reneel executable (do not pass `-x` or `--reneelpath` options)
 
+## Using Snakemake
+
+`workflow/reneel.smk` is a Snakemake module that downloads and compiles reneel, formats edgelists, and runs reneel once per (network, chi, seed). Compilers, OpenMP, and this package all come from a conda env, so nothing needs to be installed by hand. In your project's Snakefile:
+
+```python
+module reneel:
+    snakefile: github("kuninlab/reneel-utils", path="workflow/reneel.smk", tag="<release tag>")
+    config: config["reneel"]
+use rule * from reneel
+
+rule all:
+    input: rules.reneel_all.input
+```
+
+and in `config.yaml`:
+
+```yaml
+reneel:
+  networks:                      # values for the {dataset} and {networkname} wildcards
+    - {dataset: fafb, networkname: mbnetwork}
+  chi_replicates:                # number of seeds per chi value
+    - {chi: 0.0, n_replicates: 100}
+    - {chi: 0.1, n_replicates: 10}
+  seed_multiplier: 1998597987    # seeds are seed_multiplier * i
+  krg: 2
+  rg_ensemble_size: 10
+  reneel_ensemble_size: 10
+  threads: 10
+  format_args: "--sep comma --skip 1"   # passed to format_edgelist
+  # optional, shown with defaults:
+  # network_dir: "data/processed/{dataset}"   # where {networkname}{ext} lives
+  # results_dir: "results/reneel/{dataset}"
+  # ext: ".csv"
+  # executable: "resources/reneel/reneel"
+  # commit: <pinned commit of sekunder/generalized-modularity-density>
+```
+
+Run with `snakemake --sdm conda` (`--use-conda` on Snakemake < 8). On a cluster, compute nodes often have no internet access, so create the env and build reneel on the login node first:
+
+```shell
+snakemake --sdm conda --conda-create-envs-only
+snakemake --sdm conda -c1 resources/reneel/reneel
+```
+
+(`reneel_build` is a local rule, so it never gets submitted to a compute node anyway.)
+
+Outputs are `results/reneel/{dataset}/partition_{networkname}_{seed}-{chi}{ext}` (and `results_...`), which `get_available_clustering` and `load_partition` understand.
+
 ## Usage -- loading clustering output
 
 The output of `run_reneel` uses specific file name formats to allow for easily organizing data.
@@ -70,29 +118,20 @@ If you also need to use the commandline scripts or will be editing this package 
 
 ```shell
 git clone git@github.com:kuninlab/reneel-utils.git
-cd reneel-utils/reneelutil/
+cd reneel-utils
 pip install -e .
 ```
 
-### Basic installation -- commandline only
-
-Download this repo somewhere convenient, then add the `src` directory to your path:
-
-```shell
-git clone git@github.com:kuninlab/reneel-utils.git
-cd reneel-utils/reneelutil/
-export PATH=$PATH:$(pwd)
-```
-
-Both `format_edgelist.py` and `run_rneel.py` look for python in `/opt/anaconda3/bin/python`, because I'm a conda junkie. You can edit those to point to whichever python executable you want; they should work on `python >= 3.9` with only the standard libraries.
+Either way, installing provides the `format_edgelist` and `run_reneel` commands. Requires `python >= 3.11`.
 
 ### Installing Reneel
 
-Download the [generalized modularity density](https://github.com/prameshsingh/generalized-modularity-density) repo and compile the executable
+The Snakemake module and the Docker image both build reneel for you. To build it by hand, use the [fork with the OpenMP thread-count fix](https://github.com/sekunder/generalized-modularity-density/tree/fix-omp-thread-count):
 
 ```shell
-git clone git@github.com:prameshsingh/generalized-modularity-density.git
+git clone --branch fix-omp-thread-count https://github.com/sekunder/generalized-modularity-density.git
 cd generalized-modularity-density
-gcc-9 main.c help.c rg.c -fopenmp -lm
-mv a.out reneel  # not required, just convenient
+gcc main.c help.c rg.c -fopenmp -lm -O2 -o reneel
 ```
+
+On macOS, see [docs/compiling-mac.md](docs/compiling-mac.md).

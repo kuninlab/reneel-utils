@@ -1,3 +1,10 @@
 [build-system]
 requires = ["setuptools>=42.0", "wheel"]
 build-backend = "setuptools.build_meta"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-m 'not e2e'"
+markers = [
+    "e2e: builds and runs real reneel through the Snakemake module (needs snakemake + conda; run with -m e2e)",
+]

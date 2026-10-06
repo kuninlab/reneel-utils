@@ -15,7 +15,7 @@ from collections import Counter
 import shutil
 import os
 
-from util import MyArgumentParser, parse_toml_args, merge_args, remap_paths_for_docker
+from reneelutil.util import MyArgumentParser, parse_toml_args, merge_args, remap_paths_for_docker
 
 class AddDict(dict):
     """If `key` is missing, set the default value to `0.0`
@@ -330,7 +330,7 @@ _DEFAULTS = {
     "suffix":   "",
 }
 
-if __name__ == "__main__":
+def main(argv=None):
     ap = argparse.ArgumentParser(description="""Format an edgelist for use with the generalized modularity density program.
 This will take the given edgelist and renumber the nodes 1...N,
 where N is the number of unique nodes in the graph. Moreover, it will sum
@@ -402,7 +402,7 @@ This python script is an attempt to reverse-engineer the `work.sh` file.""",
                     help="Which column contains the target node of each edge. Default 1 for second column")
     structure_group.add_argument('-w', '--w_col', type=int, default=None,
                     help="Which column contains the edge weight. Default 2 for third column")
-    cli_args = ap.parse_args()
+    cli_args = ap.parse_args(argv)
 
     cfg = parse_toml_args(cli_args.config, Path(__file__).stem)
 
@@ -429,3 +429,7 @@ This python script is an attempt to reverse-engineer the `work.sh` file.""",
         remap_paths_for_docker(args, output_dir="/data")
 
     format_for_reneel(**args)
+
+
+if __name__ == "__main__":
+    main()

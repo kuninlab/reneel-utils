@@ -8,6 +8,9 @@ import numpy as np
 import re
 from re import Pattern
 
+# partition_[name]_[seed]-[chi]-[id].[ext]; the -[id] part is optional (e.g. Snakemake outputs omit it)
+PARTITION_NAME_RE = re.compile(r"^partition_(?P<name>.+)_(?P<seed>[0-9]+)(-|_)(?P<chi>[0-9]*\.[0-9]*)((-|_)(?P<id>[^.]+))?(?P<ext>\.[a-zA-Z]+)?")
+
 
 def load_matrix(matrix_file: Path):
     """Load the given connectivity matrix and return it as a dataframe.
@@ -49,14 +52,13 @@ def load_partition(key_file, partition_file,
     (inferred from the partition file name) depending on `include_seed`"""
     key_file = Path(key_file).resolve()
     partition_file = Path(partition_file).resolve()
-    key_type, key_name = _get_filename_parts(key_file)
-    partition_type, partition_name, info = _get_filename_parts(partition_file)
+    key_type, key_name = key_file.stem.split("_", maxsplit=1)
+    m = PARTITION_NAME_RE.match(partition_file.name)
     assert key_type == "key", f"Key file {key_file} does not appear to be a key"
-    assert partition_type == "partition", f"Partition file {partition_file} does not appear to be a partition file"
-    assert key_name == partition_name, f"Key name {key_name} does not match partition name {partition_name}"
-    seed, chi, tmp = info.split("-", maxsplit=2)
-    seed = int(seed)
-    chi = float(chi)
+    assert m is not None, f"Partition file {partition_file} does not appear to be a partition file"
+    assert key_name == m["name"], f"Key name {key_name} does not match partition name {m['name']}"
+    seed = int(m["seed"])
+    chi = float(m["chi"])
     with open(key_file, "r") as kf, open(partition_file, "r") as pf:
         df = pd.DataFrame([(node_convert(key.strip()), int(cluster.strip())) for key, cluster in zip(kf.readlines(), pf.readlines())])
     df = df.set_index(0)
@@ -69,7 +71,7 @@ def load_partition(key_file, partition_file,
 
 
 def get_available_clustering(clustering_dir: str | Path="../results/clustering",
-                             name_regex:str | Pattern=r"^partition_(?P<name>.+)_(?P<seed>[0-9]+)(-|_)(?P<chi>[0-9]*\.[0-9]*)((-|_)(?P<id>[^.]+))?(?P<ext>\.[a-zA-Z]+)?"):
+                             name_regex:str | Pattern=PARTITION_NAME_RE):
     """Look for files named 'partition_[name]_[seed]-[chi]-[id] in the
     specified directory and return a dataframe with info.
     
@@ -94,9 +96,10 @@ def get_available_clustering(clustering_dir: str | Path="../results/clustering",
     #         continue
     for file in [f for f in os.listdir(clustering_dir) if f.startswith("partition")]:
         m = ex.match(file)
-        if m is not None:
-            seed = int(m["seed"])
-            chi = float(m["chi"])
+        if m is None:
+            continue
+        seed = int(m["seed"])
+        chi = float(m["chi"])
         available.append((m["name"], chi, seed, m["id"], Path(clustering_dir, file)))
     all_files = pd.DataFrame(available, columns=["name", "chi", "seed", "id", "file"]).sort_values(["name","chi"])
     return all_files

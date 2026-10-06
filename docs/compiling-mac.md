@@ -1,5 +1,7 @@
 # Compiling reneel on macOS
 
+> **Easier route:** the Snakemake module in `workflow/reneel.smk` builds reneel inside a conda env (conda-forge clang + `llvm-openmp`), with no Homebrew setup needed. See the README. The rest of this doc is for building by hand.
+
 The [generalized-modularity-density README](https://github.com/prameshsingh/generalized-modularity-density)
 says to compile with:
 

@@ -9,17 +9,18 @@ random seeds.
 """
 import argparse, logging
 import os, shutil
+import sys
 import tomllib
 from pathlib import Path
 import subprocess
 import time
-from itertools import cycle, product
+from itertools import cycle
 from secrets import randbits, token_hex
 from tempfile import TemporaryDirectory
 from dataclasses import dataclass, field, asdict
 from datetime import datetime
 
-from util import MyArgumentParser, parse_toml_args, merge_args, remap_paths_for_docker
+from reneelutil.util import MyArgumentParser, parse_toml_args, merge_args, remap_paths_for_docker
 
 
 @dataclass
@@ -52,7 +53,7 @@ class ReneelRun:
         # self.clean_file = self.edgelist_file.with_stem(f"clean_{self.edgelist_file.stem}")
         # self.degree_file = self.edgelist_file.with_stem(f"degree_{self.edgelist_file.stem}")
         # self.info_file = self.edgelist_file.with_stem(f"info_{self.edgelist_file.stem}")
-    
+
 
     def __str__(self):
         return "\n".join(f"{k}: {v}" for k,v in asdict(self).items())
@@ -69,11 +70,29 @@ def seed_generator(seeds=None):
             yield s
 
 
+def plan_runs(inputs, chi, nruns, seeds=None):
+    """Return the list of (file, chi, seed) triples to run.
+
+    `nruns` is either a single int (or one-element list), applied to every chi
+    value, or a list with one entry per chi value. Seeds are drawn from
+    `seed_generator(seeds)` in order chi -> file -> replicate."""
+    if isinstance(nruns, int):
+        nruns = [nruns]
+    nruns = list(nruns)
+    if len(nruns) == 1:
+        nruns = nruns * len(chi)
+    if len(nruns) != len(chi):
+        raise ValueError(f"nruns must have length 1 or match chi ({len(chi)} values); got {len(nruns)}")
+    seed_iter = seed_generator(seeds)
+    return [(file, c, next(seed_iter))
+            for c, n in zip(chi, nruns)
+            for file in inputs
+            for _ in range(n)]
+
+
 def ensure_dir_exists(path):
     """Checks if the given directory exists. If not, creates it."""
-    _path = Path(path).resolve()
-    if not _path.is_dir():
-        os.makedirs(_path)
+    os.makedirs(Path(path).resolve(), exist_ok=True)
     return None
 
 
@@ -81,12 +100,17 @@ def run_reneel_and_collect_output(path_to_executable,
                                   output_dir,
                                   reneel_run: ReneelRun,
                                   keep_results=False, test_mode=False,
-                                  n_cpu=os.cpu_count()):
-    """Run reneel in the input file's directory without copying input files.
+                                  n_cpu=os.cpu_count(),
+                                  partition_out=None, results_out=None):
+    """Run reneel in a private temporary directory containing symlinks to the
+    input files, then move the outputs into place.
 
-    Uses a random hex ID to uniquely name output files, replacing the old
-    temp-directory name that served the same purpose.
-    """
+    The private directory keeps concurrent runs on the same input from
+    overwriting each other's outputs, without copying (possibly large) inputs.
+    Output files are named with a random hex ID unless `partition_out` /
+    `results_out` give explicit paths.
+
+    Returns True if reneel succeeded and its outputs were collected."""
     rg_ensemble_per_cpu = max(reneel_run.rg_ensemble_size // n_cpu, 1)
     if rg_ensemble_per_cpu * n_cpu != reneel_run.rg_ensemble_size:
         logging.warning(f"Using rg ensemble size {rg_ensemble_per_cpu * n_cpu}; expected {reneel_run.rg_ensemble_size} but {n_cpu = }")
@@ -94,55 +118,58 @@ def run_reneel_and_collect_output(path_to_executable,
     if reneel_ensemble_per_cpu * n_cpu != reneel_run.reneel_ensemble_size:
         logging.warning(f"Using reneel iteration size {reneel_ensemble_per_cpu * n_cpu}; expected {reneel_run.reneel_ensemble_size} but {n_cpu = }")
 
-    current_dir = os.getcwd()
-    _output_dir = Path(output_dir)
-    ensure_dir_exists(_output_dir)
-    _output_dir = _output_dir.resolve()
     _path_to_executable = Path(path_to_executable).resolve()
+    input_file = reneel_run.edgelist_file.resolve()
 
     run_id = token_hex(4)
     tmp_suffix = f"{reneel_run.seed}-{reneel_run.chi}-{run_id}"
-
-    input_file = reneel_run.edgelist_file.resolve()
-    input_dir = input_file.parent
-
-    partition_file = input_file.with_stem(f"partition_{input_file.stem}")
-    output_partition_file = Path(_output_dir, partition_file.with_stem(f"{partition_file.stem}_{tmp_suffix}").name)
-    results_file = input_file.with_stem(f"results_{input_file.stem}")
-    output_results_file = Path(_output_dir, results_file.with_stem(f"{results_file.stem}_{tmp_suffix}").name)
-
-    cmd = [_path_to_executable, reneel_run.rg_parameter, rg_ensemble_per_cpu, reneel_ensemble_per_cpu, reneel_run.seed, reneel_run.chi, input_file.name]
-    if test_mode:
-        cmd = ['echo'] + cmd
-    cmd = list(map(str, cmd))
-    logging.debug(f"Input directory: {input_dir}\ncmd: {' '.join(cmd)}")
-
-    if test_mode:
-        with open(partition_file, "a") as pf:
-            print("Testing", reneel_run.seed, reneel_run.chi, file=pf)
-        with open(results_file, "a") as rf:
-            print("Testing", reneel_run.seed, reneel_run.chi, file=rf)
-
-    os.chdir(input_dir)
-    t_start = time.perf_counter()
-    reneel_run.completed_process = subprocess.run(cmd)
-    t_end = time.perf_counter()
-    reneel_run.wall_time = t_end - t_start
-    os.chdir(current_dir)
-
-    if reneel_run.completed_process.returncode:
-        logging.warning(f"Process returned error code {reneel_run.completed_process.returncode}:\n{reneel_run.completed_process}")
-
-    logging.debug(f"Moving {partition_file} to {output_partition_file}")
-    shutil.move(partition_file, output_partition_file)
+    if partition_out is None:
+        partition_out = Path(output_dir, f"partition_{input_file.stem}_{tmp_suffix}{input_file.suffix}")
+    if results_out is None:
+        results_out = Path(output_dir, f"results_{input_file.stem}_{tmp_suffix}{input_file.suffix}")
+    partition_out = Path(partition_out).resolve()
+    results_out = Path(results_out).resolve()
+    ensure_dir_exists(partition_out.parent)
     if keep_results:
-        logging.debug(f"Moving {results_file} to {output_results_file}")
-        shutil.move(results_file, output_results_file)
+        ensure_dir_exists(results_out.parent)
 
-    reneel_run.partition_file = output_partition_file
-    if keep_results:
-        reneel_run.results_file = output_results_file
-    return None
+    # Work directory next to the outputs, so the final move stays on one filesystem
+    with TemporaryDirectory(dir=partition_out.parent, prefix=".reneel-") as tmpdir:
+        for file in reneel_run.associated_files:
+            os.symlink(Path(file).resolve(), Path(tmpdir, file.name))
+        partition_file = Path(tmpdir, f"partition_{input_file.name}")
+        results_file = Path(tmpdir, f"results_{input_file.name}")
+
+        cmd = [_path_to_executable, reneel_run.rg_parameter, rg_ensemble_per_cpu, reneel_ensemble_per_cpu, reneel_run.seed, reneel_run.chi, input_file.name]
+        if test_mode:
+            cmd = ['echo'] + cmd
+            with open(partition_file, "a") as pf:
+                print("Testing", reneel_run.seed, reneel_run.chi, file=pf)
+            with open(results_file, "a") as rf:
+                print("Testing", reneel_run.seed, reneel_run.chi, file=rf)
+        cmd = list(map(str, cmd))
+        logging.debug(f"Working directory: {tmpdir}\ncmd: {' '.join(cmd)}")
+
+        t_start = time.perf_counter()
+        reneel_run.completed_process = subprocess.run(cmd, cwd=tmpdir)
+        t_end = time.perf_counter()
+        reneel_run.wall_time = t_end - t_start
+
+        if reneel_run.completed_process.returncode:
+            logging.error(f"Process returned error code {reneel_run.completed_process.returncode}:\n{reneel_run.completed_process}")
+            return False
+        if not partition_file.exists():
+            logging.error(f"reneel exited normally but did not write {partition_file.name}")
+            return False
+
+        logging.debug(f"Moving {partition_file} to {partition_out}")
+        shutil.move(partition_file, partition_out)
+        reneel_run.partition_file = partition_out
+        if keep_results:
+            logging.debug(f"Moving {results_file} to {results_out}")
+            shutil.move(results_file, results_out)
+            reneel_run.results_file = results_out
+    return True
 
 
 def run_reneel_and_collect_output_with_temp(path_to_executable,
@@ -221,16 +248,19 @@ _DEFAULTS = {
     "rg_parameter":         2,
     "reneelpath":           "a.out",
     "output":               None,
+    "partition_out":        None,
+    "results_out":          None,
     "logfile":              "reneel.log",
     "keepresults":          False,
     "test":                 False,
     "docker":               False,
 }
 _WARNINGS = {
-    "nproc": "set using `os.cpu_count()` which may not give accurate results." 
+    "nproc": "set using `os.cpu_count()` which may not give accurate results."
 }
 
-if __name__ == "__main__":
+
+def main(argv=None):
     ap = MyArgumentParser(description="""Run the reneel executable one or more times.
                                  This could probably just be a bash script but here we are.""",
                                  fromfile_prefix_chars="@")
@@ -246,8 +276,12 @@ if __name__ == "__main__":
                     help="Pass arguments via configuration file. Commandline args take precedence.")
     io_group.add_argument("-o", "--output", dest="output", default=None,
                     help="Directory to store output. Defaults to current working directory")
-    io_group.add_argument("--outputdir", dest="output", default=None, 
+    io_group.add_argument("--outputdir", dest="output", default=None,
                     help="Deprecated alias for --output")
+    io_group.add_argument("--partition-out", default=None,
+                    help="Exact path for the partition file. Only valid when exactly one run is requested; overrides --output naming")
+    io_group.add_argument("--results-out", default=None,
+                    help="Exact path for the results file (implies --keepresults). Only valid when exactly one run is requested")
     io_group.add_argument("-k", "--keepresults", action="store_true", default=None,
                     help="Pass to keep results_[file] from reneel output")
     io_group.add_argument("-l", "--logfile", default=None,
@@ -263,8 +297,8 @@ if __name__ == "__main__":
     qg_group.add_argument("-c", "--chi", default=None,
                     nargs="+", type=float,
                     help="Chi value(s) to use")
-    qg_group.add_argument("-n", "--nruns", type=int, default=None,
-                    help="Number of times to run each chi value")
+    qg_group.add_argument("-n", "--nruns", nargs="+", type=int, default=None,
+                    help="Number of times to run each chi value. Either one number for all chi values, or one per chi value")
     qg_group.add_argument("-s", "--seed", nargs="+", type=int, default=None,
                           help="Seed for random number generation. Multiple seeds will be cycled through for each individual call to reneel. If not specified, seeds will be generated randomly")
 
@@ -280,8 +314,13 @@ if __name__ == "__main__":
     ex_group.add_argument("-g", "--rg-parameter", type=int, default=None,
                     help="Parameter for randomized greedy algorithm (default 2)")
 
-    cli_args = ap.parse_args()
+    cli_args = ap.parse_args(argv)
     cfg = parse_toml_args(cli_args.config, Path(__file__).stem)
+
+    # Handle deprecated positional file args before the general merge
+    if cli_args.file:
+        logging.warning("Passing input files as positional arguments is deprecated; use --input instead.")
+        cli_args.input = (cli_args.input or []) + cli_args.file
 
     # Merge: explicit CLI > TOML > defaults
     args = merge_args(cli_args, cfg, _DEFAULTS, _WARNINGS)
@@ -309,15 +348,36 @@ if __name__ == "__main__":
     if args["docker"]:
         remap_paths_for_docker(args, output_dir="/results")
 
+    try:
+        runs = plan_runs(args["input"], args["chi"], args["nruns"], seeds=args["seed"])
+    except ValueError as e:
+        ap.error(str(e))
+    if (args["partition_out"] or args["results_out"]) and len(runs) != 1:
+        ap.error(f"--partition-out/--results-out require exactly one run, but {len(runs)} were requested")
+    if args["results_out"]:
+        args["keepresults"] = True
+
     ensure_dir_exists(Path(args["logfile"]).parent)
 
+    n_failed = 0
     with open(args["logfile"], "a") as logfile:
-        for (chi, file, run_number), seed in zip(product(args["chi"], args["input"], range(args["nruns"])), seed_generator(seeds=args["seed"])):
-            logging.info(f"Iteration {chi}-{file}-{run_number}")
+        for run_number, (file, chi, seed) in enumerate(runs):
+            logging.info(f"Run {run_number + 1}/{len(runs)}: {file} {chi = } {seed = }")
             reneelrun = ReneelRun(edgelist_file=file, seed=seed, chi=chi,
                                   rg_ensemble_size=args["rg_ensemble_size"],
                                   reneel_ensemble_size=args["reneel_ensemble_size"],
                                   rg_parameter=args["rg_parameter"])
-            run_reneel_and_collect_output(args["reneelpath"], args["output"], reneelrun, args["keepresults"], test_mode=args["test"], n_cpu=args["nproc"])
+            ok = run_reneel_and_collect_output(args["reneelpath"], args["output"], reneelrun, args["keepresults"],
+                                               test_mode=args["test"], n_cpu=args["nproc"],
+                                               partition_out=args["partition_out"], results_out=args["results_out"])
+            n_failed += not ok
             print(f"{datetime.now():%m/%d/%Y %I:%M:%S %p} test = {args['test']}\n",
                   reneelrun, file=logfile)
+
+    if n_failed:
+        logging.error(f"{n_failed} of {len(runs)} reneel runs failed")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
