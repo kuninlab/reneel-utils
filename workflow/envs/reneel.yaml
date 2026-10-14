@@ -11,4 +11,4 @@ dependencies:
   - pip
   - pip:
     # Keep in sync with the tag the module is released under (see README)
-    - git+https://github.com/kuninlab/reneel-utils@snakemake
+    - git+https://github.com/kuninlab/reneel-utils@v0.1.0

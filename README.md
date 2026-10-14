@@ -135,3 +135,14 @@ gcc main.c help.c rg.c -fopenmp -lm -O2 -o reneel
 ```
 
 On macOS, see [docs/compiling-mac.md](docs/compiling-mac.md).
+
+## Releasing
+
+The Snakemake module's conda env (`workflow/envs/reneel.yaml`) pip-installs this package at a release tag, so the module at tag `vX.Y.Z` installs the package from that same tag. To release:
+
+1. Change the pip line in `workflow/envs/reneel.yaml` to `@vX.Y.Z` (the tag you're about to create), and set `version = X.Y.Z` in `setup.cfg`.
+2. Commit, then `git tag vX.Y.Z && git push origin main vX.Y.Z`.
+
+Choosing the tag name before creating it avoids a self-reference loop (a commit SHA can't be written into its own commit). Never move a tag after pushing it.
+
+The `commit` in `workflow/reneel.smk` is unrelated: it pins the reneel C source in `sekunder/generalized-modularity-density`, and only changes if that code does.
